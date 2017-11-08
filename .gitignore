@@ -6,3 +6,4 @@ build/
 devel/
 logs/
 .metadata/
+.vscode/
