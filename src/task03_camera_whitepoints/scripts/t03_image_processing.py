@@ -1,23 +1,14 @@
 #!/usr/bin/env python
-import roslib
-# roslib.load_manifest('my_package')
+
 import sys
 import rospy
 import cv2
 import numpy as np
 import math
 from std_msgs.msg import String
-from geometry_msgs.msg import Pose
-from geometry_msgs.msg import Point
-from geometry_msgs.msg import Quaternion
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-#import matplotlib
-#matplotlib.use('Agg')
-from matplotlib import pyplot as plt
 from operator import itemgetter
-
-# from __future__ import print_function
 
 class image_converter:
 
