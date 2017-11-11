@@ -204,9 +204,6 @@ class image_converter:
         print "Pitch:\t%s rad\t(%s deg)" % (pitch, np.rad2deg(pitch))
         print "Roll:\t%s rad\t(%s deg)" % (roll, np.rad2deg(roll))
 
-        #print image_points
-        #print object_points
-        # print rotationMatrixToEulerAngles(inverse_rmat)
 
 def main(args):
     rospy.init_node('image_converter', anonymous=True)
