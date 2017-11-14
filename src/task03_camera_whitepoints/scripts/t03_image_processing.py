@@ -20,7 +20,7 @@ class image_converter:
         self.pub_greyscale = rospy.Publisher("/image_processing/greyscale_img", Image, queue_size=1)
 
         # for publishing the image with unwanted white area
-        #self.pub_bw_orig = rospy.Publisher("/image_processing/bw_img_orig", Image, queue_size=1)
+        self.pub_bw_orig = rospy.Publisher("/image_processing/bw_img_orig", Image, queue_size=1)
 
         #rosrun image_view image_view image:=/image_processing/bw_img
         self.pub_bw = rospy.Publisher("/image_processing/bw_img", Image, queue_size=1)
@@ -45,15 +45,15 @@ class image_converter:
         # grayscale -> black and white
         # Leaves just 1 white big unwanted area in the top right corner, which we'll get rid of later
         bw_img = self.grayscale_to_blackwhite(gray_img)
-        #self.publish_original_bw_img(bw_img)
+        self.publish_original_bw_img(bw_img)
 
         # publish edited BW image
-        self.publish_bw_img(bw_img)
-
         square_centroids = self.get_centroids_of_contours(bw_img)
+        self.publish_bw_img(bw_img)
         print "\n-----------------"
         print "2D/image points (centroids of white squares):\n%s" % square_centroids
         print "-----------------"
+        
 
         object_points = self.get_measured_3d_coords()
         print "\n-----------------"
@@ -83,12 +83,12 @@ class image_converter:
         except CvBridgeError as e:
             print(e)
 
-    # def publish_original_bw_img(self, bw_img):
-    #     try:
-    #         self.pub_bw_orig.publish(self.bridge.cv2_to_imgmsg(bw_img, "mono8"))
-    #         rospy.loginfo("Original black and white image published")
-    #     except CvBridgeError as e:
-    #         print(e)
+    def publish_original_bw_img(self, bw_img):
+        try:
+            self.pub_bw_orig.publish(self.bridge.cv2_to_imgmsg(bw_img, "mono8"))
+            rospy.loginfo("Original black and white image published")
+        except CvBridgeError as e:
+            print(e)
 
     def publish_bw_img(self, bw_img):
         try:
