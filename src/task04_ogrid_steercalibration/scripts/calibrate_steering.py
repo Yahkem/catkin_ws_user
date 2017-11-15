@@ -14,7 +14,7 @@ class speed_controller(object):
     
     def __init__(self):
         self.pub_speed = rospy.Publisher("manual_control/speed", Int16, queue_size=10)
-        self.drive_duration = 3
+        self.drive_duration = 2
 
     def start(self):
         rospy.loginfo("starting...")
@@ -37,7 +37,7 @@ class scan_receiver(object):
     
     def __init__(self):
         self.index_offset = 12 #offset of scan_msg.ranges[] list - angles used for measuring
-        should_measure = False
+        self.should_measure = False
         rospy.Subscriber("scan", LaserScan, self.scan_recieved, queue_size=10)
 
     def set_should_measure(self, should_measure):
@@ -88,15 +88,24 @@ class scan_receiver(object):
     # def calculate_phi(self, b, c, alfa):
     #     return math.asin((b*math.sin(alfa)) / c)
 
-angles_deg = {
-    0: None,
-    30: None,
-    60: None,
-    90: None,
-    120: None,
-    150: None,
-    179: None
-}
+angles_deg = [
+    [0, None],
+    [30, None],
+    [60, None],
+    [90, None],
+    [120, None],
+    [150, None],
+    [179, None]
+]
+
+def print_table(angles_deg):
+    print "\n|--Argument--|--Real angle--|"
+
+    for p in angles_deg:
+        print "|" + "{0}".format(p[0]).rjust(7).ljust(12) + "|" + "{0}".format(p[1]).rjust(8).ljust(14) + "|"
+    
+    print "|------------|--------------|"
+    
 
 def perform_test(spd_ctrl, str_ctrl, scan_rcv, steer_arg):
     scan_rcv.should_measure = True
@@ -125,6 +134,7 @@ def main(args):
     # measure k, theta, Gamma!
     perform_test(speed_control, steer_control, scan_rcv, 70)
 
+    print_table(angles_deg)
     # print angles_deg[30]
 
     try:
