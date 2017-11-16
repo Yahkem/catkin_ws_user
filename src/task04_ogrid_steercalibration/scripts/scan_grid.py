@@ -108,7 +108,7 @@ class grid_wrapper(object):
         rospy.Subscriber("scan", LaserScan, self.scan_callback, queue_size=100)
         self.pub_grid = rospy.Publisher("scan_grid", OccupancyGrid, queue_size=100)
 
-    def resetGrid(self):
+    def reset_grid(self):
         #global occupancy_grid
         
         w = self.occupancy_grid.info.width
@@ -144,21 +144,25 @@ class grid_wrapper(object):
     def scan_callback(self, scan_msg):
         # rospy.loginfo('CB!')
         #global occupancy_grid
+        # print scan_msg
+        # return 
 
-        self.resetGrid()
+        self.reset_grid()
         free_line_drawer = line_drawer(self.occupancy_grid)
 
         # convert scan measurements into an occupancy grid
         # rospy.loginfo(len(scan_msg.ranges))   
         # rospy.loginfo(scan_msg)
         # rospy.loginfo(occupancy_grid) 
-
+        # print scan_msg.ranges
+        # print "-------------------"
         angle_min = scan_msg.angle_min
         angle_cur = angle_min
         #angle_max = scan_msg.angle_max
         angle_inc = scan_msg.angle_increment
         range_min = scan_msg.range_min
         range_max = scan_msg.range_max
+        #print "min:%s;max:%s" % (range_min, range_max)
         res = self.occupancy_grid.info.resolution
         h = self.occupancy_grid.info.height
         w = self.occupancy_grid.info.width
@@ -168,7 +172,14 @@ class grid_wrapper(object):
         # obstacle_y = []
         # in_obstacle = False
         #d==vzdalenost
+        ii = 0
         for d in scan_msg.ranges:
+            #TODO smazat
+            # if ii < 100:
+            #     ii += 1
+            #     angle_cur += angle_inc
+            #     continue
+
             found_obstacle = True
             if d > range_max or d < range_min:
                 found_obstacle = False
@@ -234,10 +245,10 @@ def main(args):
     # init occupancy grid
     occupancy_grid = OccupancyGrid()
     occupancy_grid.header.frame_id = "laser"
-    occupancy_grid.info.resolution = 0.04#None # in m/cell
+    occupancy_grid.info.resolution = 0.01#None # in m/cell
 
     # width x height cells
-    length = 600
+    length = 1000
     occupancy_grid.info.width = length#None
     occupancy_grid.info.height = length#None
 
