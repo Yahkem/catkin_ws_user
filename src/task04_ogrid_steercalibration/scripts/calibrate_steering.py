@@ -247,10 +247,21 @@ def perform_test(spd_ctrl, str_ctrl, scan_rcv, msrmt):
 
     time.sleep(0.5)
     #str_ctrl.steer(90) #straighten
-    
+
+def get_array_column(arr, idx):
+    return [row[idx] for row in arr]    
 
 def main(args):
-    # print np.rad2deg(0.0518812156548); return
+    # print np.rad2deg(0.0518812156548); 
+    
+    # print "test interpol."
+    # uhly = get_array_column(angles_deg,0) # [0,30,60,90,120,150,179]
+    # tst = [-32, -21, -14, 2.97, 17, 24, 36]
+    # print uhly
+    # print np.interp(95, uhly, tst) # arg->real
+    # print np.interp(0, tst, uhly) # real->arg
+    # return
+
     rospy.init_node("calibrate_steering")
 
     speed_control = speed_controller()
