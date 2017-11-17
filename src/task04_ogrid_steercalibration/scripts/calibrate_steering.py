@@ -13,8 +13,8 @@ from std_msgs.msg import Int16
 class speed_controller(object):
     
     def __init__(self):
-        self.pub_speed = rospy.Publisher("manual_control/speed", Int16, queue_size=10)
-        self.drive_duration = 4
+        self.pub_speed = rospy.Publisher("manual_control/speed", Int16, queue_size=1)
+        self.drive_duration = 3
 
     def start(self):
         rospy.loginfo("starting...")
@@ -28,7 +28,7 @@ class speed_controller(object):
 class steering_controller(object):
 
     def __init__(self):
-        self.pub_steer = rospy.Publisher("manual_control/steering", Int16, queue_size=10)
+        self.pub_steer = rospy.Publisher("manual_control/steering", Int16, queue_size=1)
 
     def steer(self, arg):
         self.pub_steer.publish(arg)
@@ -41,8 +41,8 @@ class scan_receiver(object):
         self.should_measure = False
         self.measure2 = False
         self.msrmt = None
-        rospy.Subscriber("scan", LaserScan, self.scan_recieved, queue_size=10) #comment before test, measure Theta
-        # rospy.Subscriber("scan", LaserScan, self.listen_theta, queue_size=10) #uncomment before test, measure Theta
+        rospy.Subscriber("scan", LaserScan, self.scan_recieved, queue_size=1) #comment before test, measure Theta
+        # rospy.Subscriber("scan", LaserScan, self.listen_theta, queue_size=1) #uncomment before test, measure Theta
 
 
     def set_measure1(self):
@@ -94,7 +94,8 @@ class scan_receiver(object):
         theta = math.acos(k/x)
 
         if not math.isnan(theta):
-            print("Theta=%s" % np.rad2deg(theta))
+            print("Theta=%s"%np.rad2deg(theta))
+            # print("a=%s\nb=%s\nc=%s\nphi=%s;\nbeta=%s;\nx=%s;\nk=%s;\nTheta=%s\n" % (a,b,c,np.rad2deg(phi),np.rad2deg(beta),x,k,np.rad2deg(theta)))
 
 
     def scan_recieved(self, scan_msg):
@@ -121,6 +122,7 @@ class scan_receiver(object):
         alfa = angle_diff*2
         self.msrmt.alfa = alfa # alfa1
 
+        print "Alfa=%s" % alfa
         #comment
         #angle1 = angle_min+angle_diff
         #angle2 = angle_max-angle_diff
@@ -205,20 +207,32 @@ class measurement(object):
 
     def calculate_after_measuring(self):
         self.d = self.k2 - self.k1
-        self.r = self.d/ math.sin(self.theta2)
+        self.r = self.d / math.sin(self.theta2)
         self.gamma = math.asin(WHEEL_DISTANCE/self.r)
 
-        print "d=%s\nr=%s\ngamma=%s" % (self.d, self.r, np.rad2deg(self.gamma))
+        gamma_deg = np.rad2deg(self.gamma)
+
+        # copied from console to angles_deg
+        print "d=%s\nr=%s\ngamma=%s" % (self.d, self.r, gamma_deg)
+    #     self.add_result(gamma_deg)
+
+    # def add_result(self, measured_angle):
+    #     for idx, mapping in enumerate(angles_deg):
+    #         if mapping[0] == self.angle_arg:
+    #             angles_deg[idx][1] = measured_angle
+    #             return
 
 
+
+''' Results of measuring - in degrees '''
 angles_deg = [
-    [0, None],
-    [30, None],
-    [60, None],
-    [90, 2.97257469303],
-    [120, None],
-    [150, None],
-    [179, None]
+    [0, None], # 5.78232772914 7.01673140476 8.37394859144 7.23885239021 23.6679004034
+    [30, None],#1.01571180243 0.998853724323 3.4167661193 3.16325378947 16.4576664611
+    [60, None], #7.02317928443 4.28223442844 3.07800787528 10.7319619901
+    [90, 2.97257469303], #4.73999588815 0.143465331583 # 2.11019396 #2.76924590998
+    [120, None], # 4.26428962395
+    [150, None], #10.0330308795
+    [179, None] #14.913139882
 ]
 
 def print_table(angles_deg):
@@ -231,10 +245,10 @@ def print_table(angles_deg):
     
 
 def perform_test(spd_ctrl, str_ctrl, scan_rcv, msrmt):
+    spd_ctrl.stop() # sicher
     scan_rcv.set_measure1()
     scan_rcv.msrmt = msrmt
     #str_ctrl.steer(90) #straighten
-    spd_ctrl.stop() # sicher
     time.sleep(0.5)
     # TODO measure1
     str_ctrl.steer(msrmt.angle_arg)
@@ -243,9 +257,9 @@ def perform_test(spd_ctrl, str_ctrl, scan_rcv, msrmt):
     rospy.Timer(rospy.Duration(spd_ctrl.drive_duration), lambda _: spd_ctrl.stop(), oneshot=True)
     
     # measures after this
-    rospy.Timer(rospy.Duration(spd_ctrl.drive_duration+0.1), lambda _: scan_rcv.set_measure2(), oneshot=True)
+    rospy.Timer(rospy.Duration(spd_ctrl.drive_duration+1.5), lambda _: scan_rcv.set_measure2(), oneshot=True)
 
-    time.sleep(0.5)
+    # time.sleep(0.5)
     #str_ctrl.steer(90) #straighten
 
 def get_array_column(arr, idx):
@@ -273,7 +287,7 @@ def main(args):
     #2.start
     #3.after x sec (2?) stop 
     # measure k, theta, Gamma!
-    m = measurement(0)
+    m = measurement(90)
     perform_test(speed_control, steer_control, scan_rcv, m) #comment before test, measure Theta
 
     #print_table(angles_deg)
