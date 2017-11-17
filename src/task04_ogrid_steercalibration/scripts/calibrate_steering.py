@@ -134,6 +134,7 @@ class scan_receiver(object):
         #vzorce
         # alfa = angle_diff*2
         
+        # TODO if a>b??
         c = math.sqrt(a*a + b*b - 2*a*b*np.cos(alfa))
         phi = math.asin((b*math.sin(alfa)) / c)
         beta = self.rad180deg - phi - angle_diff
