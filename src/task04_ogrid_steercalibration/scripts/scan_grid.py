@@ -3,12 +3,11 @@
 import rospy
 import numpy as np
 import sys
-# import shapely
-# import math
 from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import LaserScan
 
 class line_drawer(object):
+    ''' Modified version of DDA algorithm '''
 
     def __init__(self, occupancy_grid):
         self.resolution = occupancy_grid.info.resolution
@@ -103,30 +102,18 @@ class grid_wrapper(object):
 
     def __init__(self, occupancy_grid):
         self.occupancy_grid = occupancy_grid
-        #self.free_line = free_line_drawer(occupancy_grid)
         
         rospy.Subscriber("scan", LaserScan, self.scan_callback, queue_size=100)
         self.pub_grid = rospy.Publisher("scan_grid", OccupancyGrid, queue_size=100)
 
     def reset_grid(self):
-        #global occupancy_grid
-        
         w = self.occupancy_grid.info.width
         h = self.occupancy_grid.info.height
-        #res = self.occupancy_grid.info.resolution
 
-        #width_range = xrange(w)
-        #height_range = xrange(h)
-        # set all values to "FREE"
         self.occupancy_grid.data = [self.CELL_UNKNOWN]*(h*w)
-        # for x in width_range:
-        #     for y in height_range:
-        #         occupancy_grid.data[x+y] = CELL_UNKNOWN
 
     # to a given cartesian x,y coordinate, mark the corresponding cell in the grid as "OCCUPIED"
     def set_cell(self, x,y, cell_info):
-        #global occupancy_grid
-
         res = self.occupancy_grid.info.resolution
         w = self.occupancy_grid.info.width
         h = self.occupancy_grid.info.height
@@ -142,23 +129,11 @@ class grid_wrapper(object):
 
 
     def scan_callback(self, scan_msg):
-        # rospy.loginfo('CB!')
-        #global occupancy_grid
-        # print scan_msg
-        # return 
-
         self.reset_grid()
         free_line_drawer = line_drawer(self.occupancy_grid)
 
-        # convert scan measurements into an occupancy grid
-        # rospy.loginfo(len(scan_msg.ranges))   
-        # rospy.loginfo(scan_msg)
-        # rospy.loginfo(occupancy_grid) 
-        # print scan_msg.ranges
-        # print "-------------------"
         angle_min = scan_msg.angle_min
         angle_cur = angle_min
-        #angle_max = scan_msg.angle_max
         angle_inc = scan_msg.angle_increment
         range_min = scan_msg.range_min
         range_max = scan_msg.range_max
@@ -167,78 +142,26 @@ class grid_wrapper(object):
         h = self.occupancy_grid.info.height
         w = self.occupancy_grid.info.width
         d_max = max(h, w)*res
-        
-        # obstacle_x = []
-        # obstacle_y = []
-        # in_obstacle = False
-        #d==vzdalenost
-        ii = 0
-        for d in scan_msg.ranges:
-            #TODO smazat
-            # if ii < 100:
-            #     ii += 1
-            #     angle_cur += angle_inc
-            #     continue
 
+        for d in scan_msg.ranges:
             found_obstacle = True
             if d > range_max or d < range_min:
                 found_obstacle = False
                 d = d_max
-                # if in_obstacle:
-                #     #TODO Fill last found
-                    
-                #     in_obstacle = False
-                #     obstacle_x = []
-                #     obstacle_y = []
-                # angle_cur += angle_inc
-                # continue
 
-            #in_obstacle = True
-            # if d != np.inf: 
-            #     print d
-            
-            #deg = np.rad2deg(angle_cur)
             x = np.sin(angle_cur)*d
-            y = np.cos(angle_cur)*d #minus?
+            y = np.cos(angle_cur)*d
             #print "%s: [%s;%s]" % (deg, x, y)
 
-            #try add lol
-            free_line_drawer.draw_line(0.0,0.0,x,y, self.set_cell, self.CELL_FREE)
-            if found_obstacle: self.set_cell(x, y, self.CELL_OCCUPIED)
-            # obstacle_x.append(x)
-            # obstacle_y.append(y)
+            free_line_drawer.draw_line(0.0,0.0,x,y, self.set_cell, self.CELL_FREE) # draw "free line"
+            if found_obstacle: 
+                self.set_cell(x, y, self.CELL_OCCUPIED) # set occupied cell
 
             angle_cur += angle_inc
 
         rospy.loginfo("publishing occup. grid")
         self.pub_grid.publish(self.occupancy_grid)
 
-
-# --- main ---
-# rospy.init_node("scan_grid")
-
-# # init occupancy grid
-# occupancy_grid = OccupancyGrid()
-# occupancy_grid.header.frame_id = "laser"
-# occupancy_grid.info.resolution = 0.01#None # in m/cell
-
-# # width x height cells
-# occupancy_grid.info.width = 1000#None
-# occupancy_grid.info.height = 1000#None
-
-# # origin is shifted at half of cell size * resolution
-# occupancy_grid.info.origin.position.x = int(-1.0 * occupancy_grid.info.width / 2.0) * occupancy_grid.info.resolution
-# occupancy_grid.info.origin.position.y = int(-1.0 * occupancy_grid.info.height / 2.0) * occupancy_grid.info.resolution
-# occupancy_grid.info.origin.position.z = 0
-# occupancy_grid.info.origin.orientation.x = 0
-# occupancy_grid.info.origin.orientation.y = 0
-# occupancy_grid.info.origin.orientation.z = 0
-# occupancy_grid.info.origin.orientation.w = 1
-
-# rospy.Subscriber("scan", LaserScan, scanCallback, queue_size=100)
-# pub_grid = rospy.Publisher("scan_grid", OccupancyGrid, queue_size=100)
-
-# rospy.spin()
 
 def main(args):
     rospy.init_node("scan_grid")
@@ -267,7 +190,6 @@ def main(args):
         rospy.spin()
     except KeyboardInterrupt:
         print("Shutting down")
-    #cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
