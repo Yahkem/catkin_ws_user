@@ -8,6 +8,9 @@ import time
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Int16
 
+''' Manually measured distance between front and back wheels - L in sketch '''
+WHEEL_DISTANCE = 0.26
+
 class speed_controller(object):
     
     def __init__(self):
@@ -16,7 +19,8 @@ class speed_controller(object):
 
     def start(self):
         rospy.loginfo("starting...")
-        self.pub_speed.publish(100) #100=real speed
+        # 100..200=real speed backwards, 100 is too little for car No. 110
+        self.pub_speed.publish(150)
     
     def stop(self):
         rospy.loginfo("stopping...")
@@ -46,21 +50,27 @@ class scan_receiver(object):
 
 
     def set_measure1(self):
-        #because of lambda
+        ''' 1st measuring - before starting '''
         self.should_measure = True
         self.measure2 = False
 
     def set_measure2(self):
+        ''' 2nd measuring - after stopping '''
         self.should_measure = True
         self.measure2 = True
 
-    # cb for initial theta setting - closest to 0deg
     def listen_theta(self, scan_msg):
+        '''
+        cb for initial car setting before the table - theta should be 
+        closest to 0deg (perpendicular to the table) 
+        '''
+        ''''''
+
         angle_inc = scan_msg.angle_increment
         
         a = scan_msg.ranges[self.index_offset]
         b = scan_msg.ranges[-self.index_offset - 1] # -1, because it ends at PI, but starts at -PI+angle_inc
-        print "a=%s; b=%s" % (a,b)
+        #print "a=%s; b=%s" % (a,b)
 
         angle_diff = angle_inc*self.index_offset
         alfa = angle_diff*2
@@ -106,17 +116,16 @@ class scan_receiver(object):
 
         print "a=%s; b=%s" % (a, b)
 
-        angle_diff = angle_inc*self.index_offset # alfa from sketch
-        alfa = angle_diff*2 # alfa*2 from sketch
+        angle_diff = angle_inc*self.index_offset # alfa from orig. sketch - alfa/2 from our PDF
+        alfa = angle_diff*2 # alfa*2 from orig. sketch (just alfa in our PDF)
         self.msrmt.alfa = alfa # both measurements have same alfa
         print "Alfa=%s" % alfa
-
-        PI = math.pi
 
         if b > a: # to have uniform calculation, we just know that result gamma will be negative
             b,a=a,b
             self.msrmt.negative_gamma = True
 
+        PI = math.pi
         c = math.sqrt(a*a + b*b - 2*a*b*np.cos(alfa)) # 3rd side of triangle a,b,c - Law of cosine
         phi = math.asin((b*math.sin(alfa)) / c) # angle between a,c - Law of sine
         beta = PI - phi - alfa # angle between b,c
@@ -126,9 +135,6 @@ class scan_receiver(object):
         x = (a*sin_phi) / math.sin(omega) # 'ray' from 'middle wheel'
         k = sin_phi*a #if a>b else math.sin(beta)*b # perpendicular from car to the table
         theta = math.acos(k/x) # angle between 'middle wheel' and the perpendicular
-
-        # print "c=%s\nphi=%s\nbeta=%s\nomega=%s\nx=%s\nk=%s\ntheta=%s\n\n" % \
-        #     (c,np.rad2deg(phi),np.rad2deg(beta),np.rad2deg(omega),x,k,np.rad2deg(theta))
 
         if self.measure2:
             # 2nd measuring
@@ -149,10 +155,10 @@ class scan_receiver(object):
             self.msrmt.calculate_after_measuring()
         else:
             # 1st measuring
-            THETA_TOLERANCE = 0.5
+            THETA_TOLERANCE_DEG = 0.2
             theta_deg = np.rad2deg(theta)
             # theta closest to 0.0, so measurement is precise
-            if theta_deg > THETA_TOLERANCE:
+            if theta_deg > THETA_TOLERANCE_DEG:
                 return
 
             print "c=%s\nphi=%s\nbeta=%s\nomega=%s\nx=%s\nk=%s\ntheta=%s\n\n" % \
@@ -170,9 +176,6 @@ class scan_receiver(object):
 
         self.measure2 = False
         self.should_measure = False
-
-''' Manually measured distance between front and back wheels - L in sketch '''
-WHEEL_DISTANCE = 0.26
 
 class measurement(object):
     def __init__(self, angle_arg):
@@ -204,6 +207,8 @@ class measurement(object):
         self.negative_gamma = False
 
     def calculate_after_measuring(self):
+        ''' Finally calculates the steering angle - Gamma '''
+        ''''''
         self.d = self.k2 - self.k1
 
         if self.theta2 == 0:
@@ -218,26 +223,6 @@ class measurement(object):
 
         # copied from console to angles_deg
         print "d=%s\nr=%s\nGAMMA=%s" % (self.d, self.r, gamma_deg)
-
-
-''' Results of measuring - in degrees '''
-angles_deg = [
-    [0, None], # 5.78232772914 7.01673140476 8.37394859144 7.23885239021 23.6679004034
-    [30, None],#1.01571180243 0.998853724323 3.4167661193 3.16325378947 16.4576664611
-    [60, None], #7.02317928443 4.28223442844 3.07800787528 10.7319619901
-    [90, 2.97257469303], #4.73999588815 0.143465331583 # 2.11019396 #2.76924590998
-    [120, None], # 4.26428962395
-    [150, None], #10.0330308795
-    [179, None] #14.913139882
-]
-
-def print_table(angles_deg):
-    print "\n|--Argument--|--Real angle--|"
-
-    for p in angles_deg:
-        print "|" + "{0}".format(p[0]).rjust(7).ljust(12) + "|" + "{0}".format(p[1]).rjust(8).ljust(14) + "|"
-    
-    print "|------------|--------------|"
     
 
 def perform_test(spd_ctrl, str_ctrl, scan_rcv, msrmt, setup_only):
@@ -247,9 +232,10 @@ def perform_test(spd_ctrl, str_ctrl, scan_rcv, msrmt, setup_only):
 
     scan_rcv.set_measure1()
     scan_rcv.msrmt = msrmt
-    time.sleep(2) # wait for measurement
+    time.sleep(3) # wait for measurement
     
     str_ctrl.steer(msrmt.angle_arg)
+
     time.sleep(1) # wait for setting up steering
     spd_ctrl.start()
 
@@ -260,35 +246,81 @@ def perform_test(spd_ctrl, str_ctrl, scan_rcv, msrmt, setup_only):
     rospy.Timer(rospy.Duration(spd_ctrl.drive_duration+1.5), lambda _: scan_rcv.set_measure2(), oneshot=True)
 
 
-def get_array_column(arr, idx):
-    return [row[idx] for row in arr]    
+''' Results (averages) of measuring in degrees - for car 110 '''
+angles_deg = [
+    [0,   -23.4823835367],    # -23.8418953722 -24.0913108159 -22.4961806438 -23.5001473151
+    [30,  -16.2088298025],   # -15.8405150848 -16.3304318634 -16.4555424593
+    [60,  -4.10722402982],   # -3.925023556 -4.21421003704 -4.29155329334 -3.9981092329
+    [90,  6.64525217941],    # 7.02064849679 6.39020915783 6.29304502429 6.19871173474 6.69710307507 7.27179558772
+    [120, 16.4196652944],   # 17.0847227029 18.3732680177 13.7933384996 16.3644164796 16.4825807722
+    [150, 27.7491348616],   # 28.2959050934 28.8493908796 24.9688251374 27.8538893158 28.7776638818
+    [179, 30.8972609386]    # 31.07290129 30.630594272 30.9882872539  
+]
+# measured_angles = [
+#     [-23.8418953722, -24.0913108159, -22.4961806438, -23.5001473151],
+#     [-15.8405150848, -16.3304318634, -16.4555424593],
+#     [-3.925023556, -4.21421003704, -4.29155329334, -3.9981092329],
+#     [7.02064849679, 6.39020915783, 6.29304502429, 6.19871173474, 6.69710307507, 7.27179558772],
+#     [17.0847227029, 18.3732680177, 13.7933384996, 16.3644164796, 16.4825807722],
+#     [28.2959050934, 28.8493908796, 24.9688251374, 27.8538893158, 28.7776638818],
+#     [31.07290129, 30.630594272, 30.9882872539]
+# ]
+
+# # was used for calculating averages for each angle
+# def calc_avg(l):
+#     print reduce(lambda x, y: x + y, l) / len(l)
+
+def print_table(angles_deg):
+    print "\n|---Argument---|---Real angle---|"
+
+    for p in angles_deg:
+        print "|" + "{0}".format(p[0]).rjust(8).ljust(14) + "|" + "{0}".format(p[1]).rjust(15).ljust(16) + "|"
+    
+    print "|--------------|----------------|"
+
+
+# Create a mapping function which gets angles of the front wheel in deg as an input and returns values from 0 to 179.
+def steering_angle_mapping(degrees):
+    # pasted from the table above
+    topic_args = [0, 30, 60, 90, 120, 150, 179]
+    measured = [-23.4823835367, -16.2088298025, -4.10722402982,
+        6.64525217941, 16.4196652944, 27.7491348616, 30.8972609386]
+    
+    deg_min = measured[0]
+    deg_max = measured[-1]
+
+    # culling high/low degrees
+    if degrees < deg_min:
+        degrees = deg_min
+    elif degrees > deg_max:
+        degrees = deg_max
+    
+    deg_interpolated = np.interp(degrees, measured, topic_args)
+
+    return int(round(deg_interpolated))
+
 
 def main(args):
-    # print np.rad2deg(0.0518812156548); 
     
-    # print "test interpol."
-    # uhly = get_array_column(angles_deg,0) # [0,30,60,90,120,150,179]
-    # tst = get_array_column(angles_deg,1)
-    # tst = [-32, -21, -14, 2.97, 17, 24, 36]
-    # print uhly
-    # print np.interp(95, uhly, tst) # arg->real
-    # print np.interp(0, tst, uhly) # real->arg
-    # return
+    # printing the table
+    print_table(angles_deg)
+
+    # testing the mapping function
+    for angle in np.arange(-35, 35, 0.5):
+        print "%s:\t%s" % (angle, steering_angle_mapping(angle))
 
     rospy.init_node("calibrate_steering")
-
-    # True==only listening to Theta,False=driving,measuring gamma
+    
+    # True==only listening to Theta angle for perpendicularity, False==driving,measuring gamma
     SETUP_ONLY = False
+
     scan_rcv = scan_receiver(setup_before_measuring=SETUP_ONLY)
     speed_control = speed_controller()
     steer_control = steering_controller()
 
     m = measurement(60) # arg==steering data sent to the topic
 
-    # comment before measuring+add False to receiver, measure Theta - should be close to 0
     perform_test(speed_control, steer_control, scan_rcv, m, SETUP_ONLY)
-
-    #print_table(angles_deg)
 
     try:
         rospy.spin()
