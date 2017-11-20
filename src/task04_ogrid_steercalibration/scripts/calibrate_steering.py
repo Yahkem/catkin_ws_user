@@ -280,8 +280,8 @@ def print_table(angles_deg):
 
 
 # Create a mapping function which gets angles of the front wheel in deg as an input and returns values from 0 to 179.
+# pasted from the table above to make it "stand-alone"
 def steering_angle_mapping(degrees):
-    # pasted from the table above
     topic_args = [0, 30, 60, 90, 120, 150, 179]
     measured = [-23.4823835367, -16.2088298025, -4.10722402982,
         6.64525217941, 16.4196652944, 27.7491348616, 30.8972609386]
