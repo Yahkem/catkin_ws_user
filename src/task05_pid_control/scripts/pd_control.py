@@ -43,6 +43,7 @@ def main(args):
     # steer_ctrl = SteeringController()
     # p_controller = PController(K_P, speed_ctrl, steer_ctrl)
 
+    # "odom"
     rospy.Subscriber("odom/pose/pose/position/y", Float64, odom_cb, queue_size=10)
 
     
