@@ -36,6 +36,8 @@ class SpeedController(object):
 
     def drive_journey(self):
         self.start()
+        # STAAAAAAAAAAAAAAAAAAAAAART
+        rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
         rospy.Timer(rospy.Duration(self.drive_duration), lambda _: self.stop(), oneshot=True)
 
 class SteeringController(object):
@@ -90,6 +92,8 @@ class PController(object):
 
         # set to time.time() in the beginning for plotting
         self.initial_time = 0.0
+        self.initial_yaw = 0.0
+        self.final_yaw = 0.0
 
         # for plotting
         self.time_arr = []
@@ -113,10 +117,14 @@ class PController(object):
         self.steer_ctrl.steer(self.output)
 
     def plot_squared_diffs_over_time(self):
+        plt.figure(1)
+        plt.subplot(111)
+        plt.title('Initial Yaw=%s | Desired Yaw=%s | Final Yaw=%s' % (self.initial_yaw, self.set_point, self.final_yaw))
         plt.plot(self.time_arr, self.squared_diffs)
         plt.xlabel('Time [s]')
         plt.ylabel('Squared yaw difference for Kp=%s' % self.Kp)
-        plt.show()        
+        plt.grid()
+        plt.show()
 
     def yaw_cb(self, yaw):
         # 1) (heading_angle) -> steer_command
@@ -132,8 +140,9 @@ class PController(object):
             self.is_chart_plotted = False
 
             # desired yaw is -15 from the initial one
-            self.set_point = yaw_angle - 15
+            self.set_point = yaw_angle - 10
             
+            self.initial_yaw = yaw_angle
             print "INITIAL YAW=%s" % yaw_angle
             print "SET POINT=%s" % self.set_point
             
@@ -153,17 +162,18 @@ class PController(object):
         self.update_and_steer(yaw_angle)
 
         if not self.speed_ctrl.is_driving and not self.is_chart_plotted:
-            self.is_chart_plotted = True
+            self.final_yaw = yaw_angle
             self.plot_squared_diffs_over_time()
+            self.is_chart_plotted = True
             rospy.signal_shutdown("Drive ended")
 
 
 def main(args):
     rospy.init_node("p_control")
 
-    K_P = 1.1 # TODO change
-    SPEED_ARG = -150
-    DRIVE_DURATION = 6
+    K_P = 0.85
+    SPEED_ARG = -180
+    DRIVE_DURATION = 14
 
     # speed_ctrl.start()
 

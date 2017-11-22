@@ -52,7 +52,9 @@ class SpeedController(object):
     def drive_journey(self):
         self.start()
         # while self.is_driving: #FU, ASSHOLE
+        # DRIIIIIIIIIIIIIVEVEEVEVEEVEEEEEEEEEEEEEEEE
         rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
+        # rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
         rospy.Timer(rospy.Duration(self.drive_duration), lambda _: self.stop(), oneshot=True)
 
 class SteeringController(object):
@@ -104,10 +106,12 @@ class PDController(object):
 
         # we will be measuring only every Xth callback
         self.cb_inc = -1
-        self.xth_cb = 30
+        self.xth_cb = 20
 
         # set to time.time() in the beginning for plotting
         self.initial_time = 0.0
+        self.initial_y_pos = 0.0
+        self.final_y_pos = 0.0
 
         # previous values for the Derivative part
         self.last_time = 0.0
@@ -142,7 +146,7 @@ class PDController(object):
         dterm = (delta_error/delta_time) if delta_time > 0 else 0.0
 
         self.output = (self.Kp * error) + (self.Kd * dterm) # Proportional + Derivative
-        self.output = -self.output
+        # self.output = -self.output # minus, because -=left, +=right
         # TODO output->steering angle?
         print "Updated, output=%s" % self.output
 
@@ -152,9 +156,12 @@ class PDController(object):
         self.steer_ctrl.steer(self.output)
 
     def plot_squared_diffs_over_time(self):
+        plt.figure(1)
+        plt.subplot(111)
+        plt.title('Initial Y-Position=%s | Desired Y-Pos=%s | Final Y-Pos=%s' % (self.initial_y_pos, self.set_point, self.final_y_pos))
         plt.plot(self.time_arr, self.y_coordinates)
         plt.xlabel('Time [s]')
-        plt.ylabel('Y-coordinate')
+        plt.ylabel('Y-coordinates')
         plt.show()        
 
     def odom_cb(self, odom_arg):
@@ -164,15 +171,17 @@ class PDController(object):
         if self.cb_inc % self.xth_cb != 0: 
             return
 
+        print "ARG=%s" %odom_arg
         y_pos = odom_arg.pose.pose.position.y
 
         if self.first_measure:
             self.first_measure = False
             self.is_chart_plotted = False
 
-            self.set_point = 0.2 # always y=0.2 
+            self.set_point = y_pos + 0.2 # always y=0.2, assuming we start on 0 
             
-            print "INITIAL Y_POS=%s" % y_pos
+            self.initial_y_pos = y_pos
+            print "INITIAL Y_POS=%s" % self.initial_y_pos
             # print "SET POINT=%s" % self.set_point
             
             self.steer_ctrl.steer(0) # at first go straight# TODO y_error -> steering
@@ -193,20 +202,22 @@ class PDController(object):
         self.update_and_steer(y_pos, True)
 
         if not self.speed_ctrl.is_driving and not self.is_chart_plotted:
-            self.is_chart_plotted = True
+            self.final_y_pos = y_pos
             self.plot_squared_diffs_over_time()
+            self.is_chart_plotted = True
+            rospy.signal_shutdown("Drive ended")
 
-# def odom_cb(odom_arg):
-#     print "Y=%s\nTime=%s\n=====" % (odom_arg.pose.pose.position.y, time.time())
+def odom_cb(odom_arg):
+    print "Y=%s\nTime=%s\n=====" % (odom_arg.pose.pose.position.y, time.time())
 
 
 def main(args):
     rospy.init_node("pd_control")
 
-    K_P = 1.1 # TODO change
-    K_D = 5 # TODO change
-    SPEED_ARG = -200
-    DRIVE_DURATION = 10
+    K_P = 0
+    K_D = 0 # TODO change
+    SPEED_ARG = -120
+    DRIVE_DURATION = 4
     
     speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     steer_ctrl = SteeringController()
@@ -214,10 +225,26 @@ def main(args):
 
     # "odom" topic
     rospy.Subscriber("odom", Odometry, pd_controller.odom_cb, queue_size=10)
-    
+
+    # pbspd = rospy.Publisher("manual_control/speed", Int16, queue_size=100)
+    # steer_ctrl.steer(0)
+    # pbspd.publish(SPEED_ARG)
+    # pbspd.publish(SPEED_ARG)
+    # pbspd.publish(SPEED_ARG)
+    # pbspd.publish(SPEED_ARG)
+    # pbspd.publish(SPEED_ARG)
+    # pbspd.publish(SPEED_ARG)
+
+    # rospy.Timer(rospy.Duration(0.1), lambda _: pbspd.publish(SPEED_ARG), oneshot=True)
+    # rospy.Subscriber("odom", Odometry, odom_cb, queue_size=10)
+    # rospy.Timer(rospy.Duration(5), lambda _: pbspd.publish(0), oneshot=True)
+    # r = rospy.Rate(1)
     try:
         rospy.spin()
+        # while not rospy.is_shutdown():
+        #     r.sleep()
     except KeyboardInterrupt:
+        speed_ctrl.pub_speed.publish(0)
         print("Shutting down")
 
 
