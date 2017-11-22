@@ -51,7 +51,7 @@ class SpeedController(object):
 
     def drive_journey(self):
         self.start()
-        # while self.is_driving: #FU, ASSHOLE
+        # while self.is_driving: #FUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU
         # DRIIIIIIIIIIIIIVEVEEVEVEEVEEEEEEEEEEEEEEEE
         rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
         # rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
