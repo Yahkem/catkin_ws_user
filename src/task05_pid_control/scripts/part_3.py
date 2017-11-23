@@ -218,7 +218,7 @@ class ScanReciever(object):
             INITIAL_ANGLE = 10
             self.listen_laser(scan_msg)
             self.steer_ctrl.steer(INITIAL_ANGLE) # so it doesn't go straight in the beginning
-            # self.ctrl_angle.update(INITIAL_ANGLE)
+            self.ctrl_angle.update(INITIAL_ANGLE)
             self.speed_ctrl.drive_journey()
             self.init_time = time.time()
 
@@ -241,7 +241,7 @@ class ScanReciever(object):
         if (c_y < P and theta_star > 0.0) or (c_y > P and theta_star < 0.0):
             theta_star *= -1
         theta_star_deg = np.rad2deg(theta_star)
-        rospy.loginfo('>>> c_y=%s; THETA*=%s; THETA*(deg)=%s' % (c_y, theta_star, theta_star_deg))
+        rospy.loginfo('>>> c_y=%s; THETA*=%srad; THETA*=%sdeg' % (c_y, theta_star, theta_star_deg))
 
         # TODO record
         self.rec_dist.append(c_y) # d?
@@ -283,7 +283,7 @@ class ScanReciever(object):
             b,a=a,b
             theta_multiplier = -1
 
-        c = math.sqrt(a*a + b*b - 2*a*b*np.cos(alfa)) # 3rd side of triangle a,b,c - Law of cosine
+        c = math.sqrt(a*a + b*b - 2.0*a*b*np.cos(alfa)) # 3rd side of triangle a,b,c - Law of cosine
         phi = math.asin((b*math.sin(alfa)) / c) # angle between a,c - Law of sine
         beta = PI - phi - alfa # angle between b,c
         omega = PI - phi - alfa/2 # angle between x,c' in triangle a,x,c'
@@ -310,8 +310,9 @@ class ScanReciever(object):
         plt.figure(1)
         plt.subplot(311)
         # plt.title('Initial Yaw=%s | Desired Yaw=%s | Final Yaw=%s' % (self.initial_yaw, self.set_point, self.final_yaw))
+        plt.ylabel('Distance from the wall in meters')
         plt.xlabel(time_label)
-        plt.ylabel('Distance from the wall [m]')
+        plt.ylabel('Distance [m]')
         plt.grid()
         # plt.show()
         plt.plot(self.rec_time, self.rec_dist)
@@ -319,8 +320,9 @@ class ScanReciever(object):
         # plt.figure(2)
         plt.subplot(312)
         # plt.title('Initial Yaw=%s | Desired Yaw=%s | Final Yaw=%s' % (self.initial_yaw, self.set_point, self.final_yaw))
+        plt.title('Theta in degrees')
         plt.xlabel(time_label)
-        plt.ylabel('Theta in degrees')
+        plt.ylabel('Theta [deg]')
         plt.grid()
         plt.plot(self.rec_time, self.rec_theta)
         # plt.show()
@@ -328,8 +330,9 @@ class ScanReciever(object):
         # plt.figure(3)
         plt.subplot(313)
         # plt.title('Initial Yaw=%s | Desired Yaw=%s | Final Yaw=%s' % (self.initial_yaw, self.set_point, self.final_yaw))
+        plt.title('Steering output in degrees (0 is straight, negative left, positive right)')
         plt.xlabel(time_label)
-        plt.ylabel('Steering output in degrees (0=straight)')
+        ply.ylabel('Steering angle [deg]')
         plt.grid()
         plt.plot(self.rec_time, self.rec_steer)
         plt.show()
@@ -346,7 +349,7 @@ def main(args):
     # speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     # steer_ctrl = SteeringController()
 
-    SPEED_ARG = -160
+    SPEED_ARG = -150
     DRIVE_DURATION = 15 # TODO change
 
     speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
