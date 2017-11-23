@@ -14,8 +14,8 @@ y = np.array([1, 10, 50, 999])
 plt.figure(1)                # the first figure
 plt.subplot(211)             # the first subplot in the first figure
 plt.title('blabla') #after subplot
-plt.plot([1, 2, 3])
+plt.plot([1, 2, 3], [4,5,6])
 plt.subplot(212)             # the second subplot in the first figure
 plt.title('222 nazev') #after subplot
-plt.plot(x, y)
+plt.plot([1,10,100], [9000, 1, -1230])
 plt.show()

@@ -18,7 +18,7 @@ P = 0.4 # m
 
 # take into account L
 ''' 's' in sketch, L from previous assignment '''
-WHEEL_DISTANCE = 0.25 # TODO measure
+WHEEL_DISTANCE = 0.255
 
 # HOW TO DO ENUM
 # def enum(**enums):
@@ -29,8 +29,10 @@ WHEEL_DISTANCE = 0.25 # TODO measure
 class SpeedController(object):
     
     def __init__(self, speed_arg, duration):
-        Q_SIZE = 10000 # must be big, otherwise problems??? - car doesn't respond :(
-        self.pub_speed = rospy.Publisher("manual_control/speed", Int16, queue_size=Q_SIZE)
+        Q_SIZE = 1000 # must be big, otherwise problems??? - car doesn't respond :(
+        self.pub_speed = rospy.Publisher("/manual_control/speed", Int16, queue_size=Q_SIZE)
+        time.sleep(1) # for initiating publisher
+        # rospy.sleep(1)
         self.speed_arg = speed_arg
         self.drive_duration = duration
         self.is_driving = False
@@ -48,17 +50,25 @@ class SpeedController(object):
         self.is_driving = False
 
     def drive_journey(self):
+        self.stop()
+        # while True:
         self.start()
         # while self.is_driving: #FUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU
         # DRIIIIIIIIIIIIIVEVEEVEVEEVEEEEEEEEEEEEEEEE
         rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
-        # rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
+        rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
+        rospy.Timer(rospy.Duration(0.2), lambda _: self.start(), oneshot=True)
+        rospy.Timer(rospy.Duration(0.2), lambda _: self.start(), oneshot=True)
+        rospy.Timer(rospy.Duration(0.3), lambda _: self.start(), oneshot=True)
+        rospy.Timer(rospy.Duration(0.3), lambda _: self.start(), oneshot=True)
         rospy.Timer(rospy.Duration(self.drive_duration), lambda _: self.stop(), oneshot=True)
 
 class SteeringController(object):
 
     def __init__(self):
-        self.pub_steer = rospy.Publisher("manual_control/steering", Int16, queue_size=100)
+        self.pub_steer = rospy.Publisher("/manual_control/steering", Int16, queue_size=100)
+        time.sleep(1) # for initiating publisher
+        # rospy.sleep(1)
 
     def steer(self, degrees):
         ''' degrees==0 -> straight '''
@@ -108,6 +118,7 @@ class PDController(object):
 
         self.cur_time = time.time()
         delta_time = self.cur_time - self.prev_time
+        print "dtime=%s" % delta_time
 
         if delta_time >= self.sample_time:
             self.p = self.kp * error
@@ -116,12 +127,12 @@ class PDController(object):
 
             if delta_time > 0.0:
                 delta_error = error - self.prev_error
-                self.d = delta_error / delta_time # *freq
+                self.d = delta_error / delta_time # delta_error*freq
 
         self.prev_time = self.cur_time
         self.prev_error = error
 
-        self.output = self.p * (self.kd * self.d)
+        self.output = self.p + (self.kd * self.d)
 
         return self.output
 
@@ -132,8 +143,8 @@ class ScanReciever(object):
         self.speed_ctrl = speed_ctrl
         self.steer_ctrl = steer_ctrl
 
-        self.wanted_alfa = 60 # deg
-        self.wanted_bside_angle = 240 # this+60 == a-side angle
+        self.wanted_alfa = 40 # deg
+        self.wanted_bside_angle = 250 # this+60 == a-side angle
         
         # we'll get these after initial receiving of the topic
         self.alfa = 0.0
@@ -142,8 +153,11 @@ class ScanReciever(object):
         self.init_time = 0.0
         self.has_recieved_init_values = False
 
-        self.ctrl_distance = PDController(1, 0, P)
-        self.ctrl_angle = PDController(1, 0, 0.0)
+        # TODO tune Kp, Kd
+        # self.ctrl_distance = PDController(1, 0, P)
+        K_P = 1.0
+        K_D = 0.0
+        self.ctrl_angle = PDController(K_P, K_D, 0.0)
 
         # for recording and plotting
         self.rec_time = []
@@ -153,13 +167,14 @@ class ScanReciever(object):
 
         if is_only_listening:
             # measuring of theta & everything...
-            rospy.Subscriber("scan", LaserScan, self.listen_laser, queue_size=1)
+            rospy.Subscriber("scan", LaserScan, self.listen_laser, queue_size=None)
         else:
             # actual driving
-            rospy.Subscriber("scan", LaserScan, self.drive_beside_wall, queue_size=1) #closest to 0
+            rospy.Subscriber("scan", LaserScan, self.drive_beside_wall, queue_size=None) #closest to 0
+        # time.sleep(1)
 
     def listen_laser(self, scan_msg):
-        rospy.loginfo("LEN=%s\n%s\n--------" % (len(scan_msg.ranges), scan_msg))
+        # rospy.loginfo("LEN=%s\n%s\n--------" % (len(scan_msg.ranges), scan_msg))
 
         len_ranges = len(scan_msg.ranges)
         idx_ratio = len_ranges/360.0
@@ -168,7 +183,7 @@ class ScanReciever(object):
         self.b_idx = int(round(flt_first_idx))
         self.a_idx = int(round(flt_first_idx + self.wanted_alfa*idx_ratio))
 
-        rospy.loginfo(">>>idx_ratio=%s; b_idx=%s; a_idx=%s" % (idx_ratio, self.b_idx, self.a_idx))
+        # rospy.loginfo(">>>idx_ratio=%s; b_idx=%s; a_idx=%s" % (idx_ratio, self.b_idx, self.a_idx))
         
         real_angle_to_b = self.b_idx * scan_msg.angle_increment
         real_angle_to_a = self.a_idx * scan_msg.angle_increment
@@ -178,28 +193,36 @@ class ScanReciever(object):
         ratb_deg = np.rad2deg(real_angle_to_b)
         rata_deg = np.rad2deg(real_angle_to_a)
 
-        rospy.loginfo('>>>ALFA(deg)=%s; Angle to b=%sdeg; Angle to a=%sdeg' % (np.rad2deg(self.alfa), ratb_deg, rata_deg))
+        # rospy.loginfo('>>>ALFA(deg)=%s; Angle to b=%sdeg; Angle to a=%sdeg' % (np.rad2deg(self.alfa), ratb_deg, rata_deg))
 
         a = scan_msg.ranges[self.a_idx]
         b = scan_msg.ranges[self.b_idx]
 
+        if math.isinf(a) or math.isinf(b):
+            return
+
         d,theta,theta_multiplier = self.get_d_and_theta(a,b)
 
-        rospy.loginfo('>>> a=%s; b=%s; d=%s; THETA=%s; THETA(deg)=%s' % (a,b,d,theta, np.rad2deg(theta)))
+        # rospy.loginfo('>>> a=%s; b=%s; d=%s; THETA=%s; THETA(deg)=%s' % (a,b,d,theta, np.rad2deg(theta)))
 
         c_y = d + math.sin(theta) * WHEEL_DISTANCE
-        theta_star = math.atan((P-c_y)/LOOKAHEAD_DISTANCE) * theta_multiplier
+        theta_star = math.atan((P-c_y)/LOOKAHEAD_DISTANCE) #* theta_multiplier
+        if (c_y < P and theta_star > 0.0) or (c_y > P and theta_star < 0.0):
+            theta_star *= -1
 
-        rospy.loginfo('>>> c_y=%s; THETA*=%s; THETA*(deg)=%s' % (c_y, theta_star, np.rad2deg(theta_star)))
+        rospy.loginfo('>>> a=%s; b=%s, THETA=%sdeg; c_y=%s; THETA*=%s; THETA*(deg)=%s' % (a,b,np.rad2deg(theta), c_y, theta_star, np.rad2deg(theta_star)))
 
 
     def drive_beside_wall(self, scan_msg):
-        if not self.has_recieved_init_values: # 1st recieve
+        if not self.has_recieved_init_values: # 1st recieve - setup values
+            INITIAL_ANGLE = 10
             self.listen_laser(scan_msg)
-            self.steer_ctrl.steer(10) # so it doesn't go straight in the beginning
+            self.steer_ctrl.steer(INITIAL_ANGLE) # so it doesn't go straight in the beginning
+            # self.ctrl_angle.update(INITIAL_ANGLE)
             self.speed_ctrl.drive_journey()
             self.init_time = time.time()
-            # TODO plot_timer
+
+            # plot after drive
             plot_time = rospy.Duration(self.speed_ctrl.drive_duration+0.5)
             rospy.Timer(plot_time, lambda _: self.plot_values(), oneshot=True)
             self.has_recieved_init_values = True
@@ -207,41 +230,48 @@ class ScanReciever(object):
         a = scan_msg.ranges[self.a_idx]
         b = scan_msg.ranges[self.b_idx]
 
-        if math.isnan(a) or math.isnan(b) or math.isinf(a) or math.isinf(b):
+        if math.isinf(a) or math.isinf(b): # math.isnan(a) or math.isnan(b) or 
             return
 
         d,theta,theta_multiplier = self.get_d_and_theta(a,b)
         # rospy.loginfo('>>> a=%s; b=%s; d=%s; THETA=%s; THETA(deg)=%s' % (a,b,d,theta, np.rad2deg(theta)))
 
         c_y = d + math.sin(theta) * WHEEL_DISTANCE
-        theta_star = math.atan((P-c_y)/LOOKAHEAD_DISTANCE) * theta_multiplier
-        rospy.loginfo('>>> c_y=%s; THETA*=%s; THETA*(deg)=%s' % (c_y, theta_star, np.rad2deg(theta_star)))
+        theta_star = math.atan((P-c_y)/LOOKAHEAD_DISTANCE) #* theta_multiplier
+        if (c_y < P and theta_star > 0.0) or (c_y > P and theta_star < 0.0):
+            theta_star *= -1
+        theta_star_deg = np.rad2deg(theta_star)
+        rospy.loginfo('>>> c_y=%s; THETA*=%s; THETA*(deg)=%s' % (c_y, theta_star, theta_star_deg))
 
         # TODO record
         self.rec_dist.append(c_y) # d?
-        self.rec_theta.append(theta) #theta_star??
+        self.rec_theta.append(np.rad2deg(theta)) #theta_star??
         self.rec_time.append(time.time() - self.init_time)
 
-        pd_angle_output = self.ctrl_angle.update(theta_star)
-        pd_distance_output = self.ctrl_distance.update(c_y) # TODO d?
+        pd_angle_output = self.ctrl_angle.update(theta_star_deg)
+        # pd_distance_output = self.ctrl_distance.update(c_y) # TODO d?
+
+        # rospy.loginfo('PD angle out=%s' % (pd_angle_output))
+        # rospy.loginfo('PD angle out=%s; PD distance out=%s' % (pd_angle_output, pd_distance_output))
 
         # TODO
-        steer_output = 0.0
-        if pd_angle_output==0.0 and pd_distance_output==0.0:
-            steer_output = 0.0
-        elif pd_angle_output != 0.0 and pd_distance_output == 0.0:
-            steer_output = pd_angle_output
-        elif pd_angle_output== 0.0 and pd_distance_output != 0.0:
-            steer_output = pd_distance_output
-        elif pd_angle_output > 0.0 and pd_distance_output > 0.0:
-            steer_output = pd_angle_output * pd_distance_output
-        else:
-            steer_output = -1 * pd_angle_output * pd_distance_output
+        steer_output = -pd_angle_output #0.0
+        # if pd_angle_output==0.0 and pd_distance_output==0.0:
+        #     steer_output = 0.0
+        # elif pd_angle_output != 0.0 and pd_distance_output == 0.0:
+        #     steer_output = pd_angle_output
+        # elif pd_angle_output== 0.0 and pd_distance_output != 0.0:
+        #     steer_output = pd_distance_output
+        # elif pd_angle_output > 0.0 and pd_distance_output > 0.0:
+        #     steer_output = pd_angle_output * pd_distance_output
+        # else:
+        #     steer_output = -1 * pd_angle_output * pd_distance_output
         
         self.steer_ctrl.steer(steer_output)
         self.rec_steer.append(steer_output)
 
-        rospy.loginfo('!!!PDANGLE=%s!PDDIST=%s!!!' % (pd_angle_output, pd_distance_output))
+        # rospy.loginfo('Steer output=%s', steer_output)
+        # rospy.loginfo('!!!PDANGLE=%s; steer_output=%sdeg!!!' % (pd_angle_output, pd_distance_output, steer_output))
 
 
     def get_d_and_theta(self, a, b):
@@ -266,29 +296,42 @@ class ScanReciever(object):
         return (d, theta, theta_multiplier)
 
     def plot_values(self):
-        plt.figure(1)
+        # EXAMPle:
+        # plt.figure(1)                # the first figure
+        # plt.subplot(211)             # the first subplot in the first figure
+        # plt.title('blabla') #after subplot
+        # plt.plot([1, 2, 3], [4,5,6])
+        # plt.subplot(212)             # the second subplot in the first figure
+        # plt.title('222 nazev') #after subplot
+        # plt.plot([1,10,100], [9000, 1, -1230])
+        # plt.show()
         time_label = 'Time [s]'
+
+        plt.figure(1)
         plt.subplot(311)
         # plt.title('Initial Yaw=%s | Desired Yaw=%s | Final Yaw=%s' % (self.initial_yaw, self.set_point, self.final_yaw))
-        plt.plot(self.rec_time, self.rec_dist)
         plt.xlabel(time_label)
-        plt.ylabel('Distance from the wall')
+        plt.ylabel('Distance from the wall [m]')
         plt.grid()
+        # plt.show()
+        plt.plot(self.rec_time, self.rec_dist)
 
+        # plt.figure(2)
         plt.subplot(312)
         # plt.title('Initial Yaw=%s | Desired Yaw=%s | Final Yaw=%s' % (self.initial_yaw, self.set_point, self.final_yaw))
-        plt.plot(self.rec_time, self.rec_theta)
         plt.xlabel(time_label)
-        plt.ylabel('Theta')
+        plt.ylabel('Theta in degrees')
         plt.grid()
+        plt.plot(self.rec_time, self.rec_theta)
+        # plt.show()
 
+        # plt.figure(3)
         plt.subplot(313)
         # plt.title('Initial Yaw=%s | Desired Yaw=%s | Final Yaw=%s' % (self.initial_yaw, self.set_point, self.final_yaw))
-        plt.plot(self.rec_time, self.rec_steer)
         plt.xlabel(time_label)
         plt.ylabel('Steering output in degrees (0=straight)')
         plt.grid()
-
+        plt.plot(self.rec_time, self.rec_steer)
         plt.show()
 
 
@@ -303,8 +346,8 @@ def main(args):
     # speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     # steer_ctrl = SteeringController()
 
-    SPEED_ARG = -180
-    DRIVE_DURATION = 1
+    SPEED_ARG = -160
+    DRIVE_DURATION = 15 # TODO change
 
     speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     steer_ctrl = SteeringController()
