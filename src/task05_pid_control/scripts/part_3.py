@@ -156,7 +156,7 @@ class ScanReciever(object):
         # TODO tune Kp, Kd
         # self.ctrl_distance = PDController(1, 0, P)
         K_P = 1.0
-        K_D = 0.0
+        K_D = 0.0001
         self.ctrl_angle = PDController(K_P, K_D, 0.0)
 
         # for recording and plotting
@@ -332,7 +332,7 @@ class ScanReciever(object):
         # plt.title('Initial Yaw=%s | Desired Yaw=%s | Final Yaw=%s' % (self.initial_yaw, self.set_point, self.final_yaw))
         plt.title('Steering output in degrees (0 is straight, negative left, positive right)')
         plt.xlabel(time_label)
-        ply.ylabel('Steering angle [deg]')
+        plt.ylabel('Steering angle [deg]')
         plt.grid()
         plt.plot(self.rec_time, self.rec_steer)
         plt.show()
@@ -341,16 +341,8 @@ class ScanReciever(object):
 def main(args):
     rospy.init_node('closing_the_loop')
 
-    # K_P = 0
-    # K_D = 0 # TODO change
-    # SPEED_ARG = -120
-    # DRIVE_DURATION = 4
-    
-    # speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
-    # steer_ctrl = SteeringController()
-
     SPEED_ARG = -150
-    DRIVE_DURATION = 15 # TODO change
+    DRIVE_DURATION = 15
 
     speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     steer_ctrl = SteeringController()
