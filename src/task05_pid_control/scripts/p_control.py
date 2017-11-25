@@ -17,7 +17,7 @@ from std_msgs.msg import Float32
 class SpeedController(object):
     
     def __init__(self, speed_arg, duration):
-        Q_SIZE = 10000 # must be big, otherwise problems - car doesn't respond :(
+        Q_SIZE = 1000 # must be big, otherwise problems - car doesn't respond sometimes - ??? :(
         self.pub_speed = rospy.Publisher("/manual_control/speed", Int16, queue_size=Q_SIZE)
         self.speed_arg = speed_arg
         self.drive_duration = duration
@@ -67,7 +67,7 @@ class SteeringController(object):
         
         deg_interpolated = np.interp(degrees, measured, topic_args)
 
-        return int(round(deg_interpolated))
+        return int(round(deg_interpolated)) # cca. +9 for simulator
 
 
 class PController(object):
@@ -88,7 +88,7 @@ class PController(object):
 
         # we will be measuring only every Xth callback
         self.yaw_cb_inc = -1
-        self.xth_cb = 20
+        self.xth_cb = 10
 
         # set to time.time() in the beginning for plotting
         self.initial_time = 0.0
@@ -98,6 +98,7 @@ class PController(object):
         # for plotting
         self.time_arr = []
         self.squared_diffs = []
+        self.heading_angles = []
         self.is_chart_plotted = False
 
     def add_time(self):
@@ -114,16 +115,25 @@ class PController(object):
 
     def update_and_steer(self, yaw_angle):
         self.update(yaw_angle)
+        self.heading_angles.append(self.output)
         self.steer_ctrl.steer(self.output)
 
     def plot_squared_diffs_over_time(self):
         plt.figure(1)
-        plt.subplot(111)
+        plt.subplot(211)
         plt.title('Initial Yaw=%s | Desired Yaw=%s | Final Yaw=%s' % (self.initial_yaw, self.set_point, self.final_yaw))
-        plt.plot(self.time_arr, self.squared_diffs)
-        plt.xlabel('Time [s]')
+        plt.xlabel('')
         plt.ylabel('Squared yaw difference for Kp=%s' % self.Kp)
         plt.grid()
+        plt.plot(self.time_arr, self.squared_diffs)
+
+        plt.subplot(212)
+        plt.title('Heading angle in degrees over time')
+        plt.xlabel('Time [s]')
+        plt.ylabel('Heading angle [deg]')
+        plt.grid()
+        plt.plot(self.time_arr, self.heading_angles)
+
         plt.show()
 
     def yaw_cb(self, yaw):
@@ -152,10 +162,8 @@ class PController(object):
             self.speed_ctrl.drive_journey() # Go!
             
             self.update_and_steer(yaw_angle)
-            #rospy.Timer(rospy.Duration(self.speed_ctrl.drive_duration+0.1), lambda _: self.plot_squared_diffs_over_time(), oneshot=True)
             return
 
-        # self.speed_ctrl.start()
         self.add_time()
         print "Yaw: %s" % yaw_angle
         
@@ -173,24 +181,13 @@ def main(args):
 
     K_P = 0.85
     SPEED_ARG = -180
-    DRIVE_DURATION = 14
+    DRIVE_DURATION = 14 # less for sim - tooks too long otherwise
 
-    # speed_ctrl.start()
-
-    # kks = rospy.Publisher("/manual_control/speed", Int16, queue_size=100)
-    # while True:
-    #     print "publishing %s" % SPEED_ARG
-    #     kks.publish(SPEED_ARG)
     speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     steer_ctrl = SteeringController()
     p_controller = PController(K_P, speed_ctrl, steer_ctrl)
 
     rospy.Subscriber("model_car/yaw", Float32, p_controller.yaw_cb, queue_size=10)
-
-    # pb = rospy.Publisher("manual_control/speed", Int16, queue_size=1)
-    # while True:
-    #     pb.publish(0)
-    # speed_ctrl.drive_journey()
 
     try:
         rospy.spin()
