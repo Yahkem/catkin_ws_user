@@ -267,9 +267,10 @@ class OdomReceiver(object):
         self.yaw_cb_inc = -1
         self.xth_cb = 10
 
-        K_P = 1.0
-        K_D = 0.000 #0.0001
+        K_P = .85
+        K_D = 0.001 #0.0001
         self.pdctrl_distance = PDController(K_P, K_D, self.wanted_y)
+        # self.pdctrl_yaw = PDController(K_P, K_D, 0.0)
 
         # for recording and plotting
         self.rec_time = []
@@ -309,8 +310,21 @@ class OdomReceiver(object):
             rospy.signal_shutdown("Plotted chart")
 
         pd_output = self.pdctrl_distance.update(y_pos)
+        # pd_yaw_out = self.pdctrl_yaw.update(yaw_deg)
         self.rec_time.append(time.time() - self.init_time)
         self.rec_ycoords.append(y_pos)
+
+        # STEER_RIGHT = -10
+        # STEER_LEFT = 10
+        # DIST_TOLERANCE = 0.1
+
+        # wanted_steer_deg = 0.0
+        # if abs(pd_output) < DIST_TOLERANCE:
+        #     wanted_steer_deg = pd_yaw_out
+        # elif pd_output > DIST_TOLERANCE:
+        #     wanted_steer_deg = STEER_RIGHT #if yaw_deg > 0.0 else STEER_RIGHT
+        # else:
+        #     wanted_steer_deg = STEER_LEFT #if yaw_deg > 0.0 else STEER_LEFT
 
         # multiplier = 0.0 if output == 0 else output
 
@@ -320,17 +334,20 @@ class OdomReceiver(object):
         #     multiplier = -1.0
 
         # wanted_steer_deg = yaw_deg * multiplier #yaw_deg*output if y_pos >= self.wanted_y else -yaw_deg*output
-        wanted_steer_deg = self.map_output(pd_output, yaw_deg) # ???????
+        # wanted_steer_deg = self.map_output(pd_output, yaw_deg) # ???????
+        wanted_steer_deg = pd_output * -50
         
         info_tuple = (y_pos, yaw_deg, pd_output, wanted_steer_deg)
         rospy.loginfo("Y=%s; Yaw=%sdeg; PDOutput=%s; Steer=%sdeg;" % info_tuple)
 
-        self.steer_ctrl.steer(wanted_steer_deg) # so it doesn't go straight in the beginning
+        # SIM(gazebo) = -steer -> right, +steer->left
+        # real car = +steer -> right, -steer ->left
+        self.steer_ctrl.steer(wanted_steer_deg)
 
-    def map_output(self, pd_output, yaw_deg):
-        inputs = [-1, 0, 1]
-        outputs = [30 , -5, 30]
-        return np.interp(pd_output, inputs, outputs)
+    # def map_output(self, pd_output, yaw_deg):
+    #     inputs = [-1, 0, 1]
+    #     outputs = [30 , -5, 30]
+    #     return np.interp(pd_output, inputs, outputs)
 
     def quaternion_to_yaw(self, q):
         ''' yaw=(z-axis rotation) '''
@@ -357,8 +374,8 @@ class OdomReceiver(object):
 def main(args):
     rospy.init_node("pd_control")
 
-    SPEED_ARG = -300
-    DRIVE_DURATION = 4
+    SPEED_ARG = -400
+    DRIVE_DURATION = 6
     
     speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     steer_ctrl = SteeringController()
