@@ -7,8 +7,6 @@ import rospy
 import matplotlib.pyplot as plt
 import numpy as np
 from std_msgs.msg import Int16
-# from std_msgs.msg import Float32
-# from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry # estimation of position without gps or anything
 
 # rostopic type /odom
@@ -91,126 +89,6 @@ class SteeringController(object):
         return int(round(deg_interpolated))+9 # +9 for sim
 
 
-# class PDController(object):
-
-#     def __init__(self, Kp, Kd, speed_ctrl, steer_ctrl):
-#         self.Kp = Kp
-#         self.Kd = Kd
-#         self.speed_ctrl = speed_ctrl
-#         self.steer_ctrl = steer_ctrl
-        
-#         # set_point == what we want -> 0.2 y
-#         self.set_point = 0.2
-
-#         # result from update()
-#         self.output = 0.0
-
-#         ''' first memasured coords - y==0 '''
-#         self.first_measure = True
-
-#         # we will be measuring only every Xth callback
-#         self.cb_inc = -1
-#         self.xth_cb = 20
-
-#         # set to time.time() in the beginning for plotting
-#         self.initial_time = 0.0
-#         self.initial_y_pos = 0.0
-#         self.final_y_pos = 0.0
-
-#         # previous values for the Derivative part
-#         self.last_time = 0.0
-#         self.last_error = 0.0
-
-#         # for plotting
-#         self.time_arr = []
-#         self.y_coordinates = []
-#         self.is_chart_plotted = False
-
-#     # def add_time(self):
-#     #     cur_time = time.time()
-#     #     self.time_arr.append(cur_time-self.initial_time)
-
-#     def update(self, process_variable, add_time):
-#         ''' process_variable = what we measure '''
-
-#         self.y_coordinates.append(process_variable)
-        
-#         error = self.set_point - process_variable
-#         delta_error = error - self.last_error
-
-#         cur_time = time.time()
-#         delta_time = cur_time - self.last_time
-#         if add_time:
-#             self.time_arr.append(cur_time - self.initial_time)
-
-#         # remember for next
-#         self.last_time = cur_time
-#         self.last_error = error
-        
-#         dterm = (delta_error/delta_time) if delta_time > 0 else 0.0
-
-#         self.output = (self.Kp * error) + (self.Kd * dterm) # Proportional + Derivative
-#         # self.output = -self.output # minus, because -=left, +=right
-#         # TODO output->steering angle?
-#         print "Updated, output=%s" % self.output
-
-#     def update_and_steer(self, y_pos, add_time):
-#         self.update(y_pos, add_time)
-#         # if add_time: self.add_time()
-#         self.steer_ctrl.steer(self.output)
-
-#     def plot_squared_diffs_over_time(self):
-#         plt.figure(1)
-#         plt.subplot(111)
-#         plt.title('Initial Y-Position=%s | Desired Y-Pos=%s | Final Y-Pos=%s' % (self.initial_y_pos, self.set_point, self.final_y_pos))
-#         plt.plot(self.time_arr, self.y_coordinates)
-#         plt.xlabel('Time [s]')
-#         plt.ylabel('Y-coordinates')
-#         plt.show()        
-
-#     def odom_cb(self, odom_arg):
-#         # 1) (heading_angle) -> steer_command
-        
-#         self.cb_inc += 1
-#         if self.cb_inc % self.xth_cb != 0: 
-#             return
-
-#         print "ARG=%s" %odom_arg
-#         y_pos = odom_arg.pose.pose.position.y
-
-#         if self.first_measure:
-#             self.first_measure = False
-#             self.is_chart_plotted = False
-
-#             self.set_point = y_pos + 0.2 # always y=0.2, assuming we start on 0 
-            
-#             self.initial_y_pos = y_pos
-#             print "INITIAL Y_POS=%s" % self.initial_y_pos
-#             # print "SET POINT=%s" % self.set_point
-            
-#             self.steer_ctrl.steer(0) # at first go straight# TODO y_error -> steering
-#             self.time_arr.append(0)
-#             self.initial_time = time.time()
-#             self.last_time = self.initial_time
-
-#             self.speed_ctrl.drive_journey() # Go!
-            
-#             self.update_and_steer(y_pos, False)
-#             #rospy.Timer(rospy.Duration(self.speed_ctrl.drive_duration+0.1), lambda _: self.plot_squared_diffs_over_time(), oneshot=True)
-#             return
-
-#         # self.speed_ctrl.start()
-#         # self.add_time()
-#         print "Y_pos: %s" % y_pos
-        
-#         self.update_and_steer(y_pos, True)
-
-#         if not self.speed_ctrl.is_driving and not self.is_chart_plotted:
-#             self.final_y_pos = y_pos
-#             self.plot_squared_diffs_over_time()
-#             self.is_chart_plotted = True
-#             rospy.signal_shutdown("Drive ended")
-
 class PDController(object):
 
     def __init__(self, kp, kd, set_point=0.0, sample_time=0.0):
@@ -267,15 +145,18 @@ class OdomReceiver(object):
         self.yaw_cb_inc = -1
         self.xth_cb = 10
 
-        K_P = .85
-        K_D = 0.001 #0.0001
+        K_P = 1
+        K_D = 0.000 #0.0001
         self.pdctrl_distance = PDController(K_P, K_D, self.wanted_y)
-        # self.pdctrl_yaw = PDController(K_P, K_D, 0.0)
+        self.pdctrl_yaw = PDController(K_P, K_D, 0.0)
 
         # for recording and plotting
         self.rec_time = []
         self.rec_ycoords = []
 
+        self.is_correcting_yaw = True
+        self.has_corrected_yaw = False
+        self.is_correcting_dist = False
         self.has_started = False
     
     def odom_cb(self, odom_msg):
@@ -297,12 +178,10 @@ class OdomReceiver(object):
             # self.pdctrl_distance.update(y_pos)
             self.wanted_y = y_pos+0.2
             self.pdctrl_distance.set_point = self.wanted_y
-            print "wanted y=%s" %self.wanted_y
+            print "Wanted Y=%s" % self.wanted_y
             self.speed_ctrl.drive_journey()
             self.init_time = time.time()
 
-            # plot_time = rospy.Duration(self.speed_ctrl.drive_duration+1)
-            # rospy.Timer(plot_time, lambda _: self.plot_values(), oneshot=True)
             self.has_started = True
 
         if not self.speed_ctrl.is_driving and self.has_started:
@@ -310,32 +189,31 @@ class OdomReceiver(object):
             rospy.signal_shutdown("Plotted chart")
 
         pd_output = self.pdctrl_distance.update(y_pos)
-        # pd_yaw_out = self.pdctrl_yaw.update(yaw_deg)
+        pd_yaw_out = self.pdctrl_yaw.update(yaw_deg)
         self.rec_time.append(time.time() - self.init_time)
         self.rec_ycoords.append(y_pos)
 
-        # STEER_RIGHT = -10
-        # STEER_LEFT = 10
-        # DIST_TOLERANCE = 0.1
+        self.is_correcting_dist = pd_output != 0.0
+        self.is_correcting_yaw = pd_yaw_out != 0.0
 
-        # wanted_steer_deg = 0.0
-        # if abs(pd_output) < DIST_TOLERANCE:
-        #     wanted_steer_deg = pd_yaw_out
-        # elif pd_output > DIST_TOLERANCE:
-        #     wanted_steer_deg = STEER_RIGHT #if yaw_deg > 0.0 else STEER_RIGHT
-        # else:
-        #     wanted_steer_deg = STEER_LEFT #if yaw_deg > 0.0 else STEER_LEFT
+        wanted_steer_deg = 0.0
 
-        # multiplier = 0.0 if output == 0 else output
+        if not self.is_correcting_yaw and not self.has_corrected_yaw:
+            # initial yaw to 0.0, now we correct dist
+            print "!!!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!"
+            self.has_corrected_yaw = True
 
-        # if output > 1.0:
-        #     multiplier = 1.0
-        # elif output < -1.0:
-        #     multiplier = -1.0
-
-        # wanted_steer_deg = yaw_deg * multiplier #yaw_deg*output if y_pos >= self.wanted_y else -yaw_deg*output
-        # wanted_steer_deg = self.map_output(pd_output, yaw_deg) # ???????
-        wanted_steer_deg = pd_output * -50
+        if not self.has_corrected_yaw:
+            print 1
+            wanted_steer_deg = -pd_yaw_out
+        elif self.is_correcting_dist:
+            print 2
+            # wanted_steer_deg = pd_output * -60
+            wanted_steer_deg = -pd_output
+        elif not self.is_correcting_dist and self.is_correcting_yaw:
+            # on line 0.2, but slightly off
+            print 3
+            wanted_steer_deg = -pd_yaw_out
         
         info_tuple = (y_pos, yaw_deg, pd_output, wanted_steer_deg)
         rospy.loginfo("Y=%s; Yaw=%sdeg; PDOutput=%s; Steer=%sdeg;" % info_tuple)
@@ -374,8 +252,8 @@ class OdomReceiver(object):
 def main(args):
     rospy.init_node("pd_control")
 
-    SPEED_ARG = -400
-    DRIVE_DURATION = 6
+    SPEED_ARG = -350
+    DRIVE_DURATION = 10
     
     speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     steer_ctrl = SteeringController()

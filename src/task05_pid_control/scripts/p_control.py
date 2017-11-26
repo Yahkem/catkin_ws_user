@@ -8,12 +8,6 @@ import numpy as np
 from std_msgs.msg import Int16
 from std_msgs.msg import Float32
 
-#(whatWeWant - theta)^2 - 
-
-# start +-10deg
-
-#K_P = 1 #'????' # 0-1.1; 1 - tune so it doesnt oscillate
-
 class SpeedController(object):
     
     def __init__(self, speed_arg, duration):
