@@ -35,7 +35,6 @@ class SpeedController(object):
         # rospy.loginfo("starting...")
         # forward < 0 > backwards
         self.is_driving = True
-        # for i in range(1, 10000): # STUPID DUMB CAR
         self.pub_speed.publish(self.speed_arg)
 
     def stop(self):
@@ -47,7 +46,6 @@ class SpeedController(object):
         self.stop()
         # while True:
         self.start()
-        # while self.is_driving: #FUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU
         # DRIIIIIIIIIIIIIVEVEEVEVEEVEEEEEEEEEEEEEEEE
         rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
         rospy.Timer(rospy.Duration(0.2), lambda _: self.start(), oneshot=True)

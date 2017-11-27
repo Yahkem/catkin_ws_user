@@ -13,6 +13,7 @@ class SpeedController(object):
     def __init__(self, speed_arg, duration):
         Q_SIZE = 1000 # must be big, otherwise problems - car doesn't respond sometimes - ??? :(
         self.pub_speed = rospy.Publisher("/manual_control/speed", Int16, queue_size=Q_SIZE)
+        time.sleep(1)
         self.speed_arg = speed_arg
         self.drive_duration = duration
         self.is_driving = False
@@ -30,14 +31,13 @@ class SpeedController(object):
 
     def drive_journey(self):
         self.start()
-        # STAAAAAAAAAAAAAAAAAAAAAART
-        rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
         rospy.Timer(rospy.Duration(self.drive_duration), lambda _: self.stop(), oneshot=True)
 
 class SteeringController(object):
 
     def __init__(self):
         self.pub_steer = rospy.Publisher("manual_control/steering", Int16, queue_size=100)
+        time.sleep(1)
 
     def steer(self, degrees):
         ''' degrees==0 -> straight '''
@@ -143,7 +143,7 @@ class PController(object):
             self.first_measure = False
             self.is_chart_plotted = False
 
-            # desired yaw is -15 from the initial one
+            # desired yaw is -10 from the initial one
             self.set_point = yaw_angle - 10
             
             self.initial_yaw = yaw_angle

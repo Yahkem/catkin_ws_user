@@ -30,7 +30,7 @@ from nav_msgs.msg import Odometry # estimation of position without gps or anythi
 class SpeedController(object):
     
     def __init__(self, speed_arg, duration):
-        Q_SIZE = 10000 # must be big, otherwise problems??? - car doesn't respond :(
+        Q_SIZE = 1000 # must be big, otherwise some problems...
         self.pub_speed = rospy.Publisher("/manual_control/speed", Int16, queue_size=Q_SIZE)
         time.sleep(1) # init publisher
         self.speed_arg = speed_arg
@@ -41,9 +41,7 @@ class SpeedController(object):
         rospy.loginfo("starting...")
         # forward < 0 > backwards
         self.is_driving = True
-        # for i in range(1, 10000): # STUPID CAR
         self.pub_speed.publish(self.speed_arg)
-        rospy.Timer(rospy.Duration(0.1), lambda _: self.pub_speed.publish(self.speed_arg), oneshot=True)
 
     def stop(self):
         # rospy.loginfo("stopping...")
@@ -52,17 +50,13 @@ class SpeedController(object):
 
     def drive_journey(self):
         self.start()
-        # while self.is_driving: #FUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU
-        # DRIIIIIIIIIIIIIVEVEEVEVEEVEEEEEEEEEEEEEEEE
-        rospy.Timer(rospy.Duration(0.1), lambda _: self.start(), oneshot=True)
-        rospy.Timer(rospy.Duration(0.2), lambda _: self.start(), oneshot=True)
         rospy.Timer(rospy.Duration(self.drive_duration), lambda _: self.stop(), oneshot=True)
 
 class SteeringController(object):
 
     def __init__(self):
         self.pub_steer = rospy.Publisher("manual_control/steering", Int16, queue_size=100)
-        time.sleep(0.5) # init publisher
+        time.sleep(1) # init publisher
 
     def steer(self, degrees):
         ''' degrees==0 -> straight '''
@@ -86,7 +80,7 @@ class SteeringController(object):
         
         deg_interpolated = np.interp(degrees, measured, topic_args)
 
-        return int(round(deg_interpolated))+9 # +9 for sim
+        return int(round(deg_interpolated)) # +9 for sim
 
 
 class PDController(object):
@@ -145,7 +139,7 @@ class OdomReceiver(object):
         self.yaw_cb_inc = -1
         self.xth_cb = 10
 
-        K_P = 1
+        K_P = 1.0
         K_D = 0.000 #0.0001
         self.pdctrl_distance = PDController(K_P, K_D, self.wanted_y)
         self.pdctrl_yaw = PDController(K_P, K_D, 0.0)
@@ -154,9 +148,7 @@ class OdomReceiver(object):
         self.rec_time = []
         self.rec_ycoords = []
 
-        self.is_correcting_yaw = True
-        self.has_corrected_yaw = False
-        self.is_correcting_dist = False
+        self.has_corrected_yaw = False # True
         self.has_started = False
     
     def odom_cb(self, odom_msg):
@@ -190,42 +182,39 @@ class OdomReceiver(object):
 
         pd_output = self.pdctrl_distance.update(y_pos)
         pd_yaw_out = self.pdctrl_yaw.update(yaw_deg)
+
+        # append values to plot
         self.rec_time.append(time.time() - self.init_time)
         self.rec_ycoords.append(y_pos)
 
-        self.is_correcting_dist = pd_output != 0.0
-        self.is_correcting_yaw = pd_yaw_out != 0.0
-
         wanted_steer_deg = 0.0
 
-        if not self.is_correcting_yaw and not self.has_corrected_yaw:
+        if pd_yaw_out == 0.0 and not self.has_corrected_yaw:
             # initial yaw to 0.0, now we correct dist
-            print "!!!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!"
+            print "YAW CORRECTED!!!"
             self.has_corrected_yaw = True
+        elif self.has_corrected_yaw:
+            wanted_steer_deg = self.map_output(pd_output) #-pd_output*15
+        else:
+            wanted_steer_deg = -15
 
-        if not self.has_corrected_yaw:
-            print 1
-            wanted_steer_deg = -pd_yaw_out
-        elif self.is_correcting_dist:
-            print 2
-            # wanted_steer_deg = pd_output * -60
-            wanted_steer_deg = -pd_output
-        elif not self.is_correcting_dist and self.is_correcting_yaw:
-            # on line 0.2, but slightly off
-            print 3
-            wanted_steer_deg = -pd_yaw_out
+        # wanted_steer_deg = pd_output if self.has_corrected_yaw else -30
+        # wanted_steer_deg = 0#-pd_output*30
         
-        info_tuple = (y_pos, yaw_deg, pd_output, wanted_steer_deg)
-        rospy.loginfo("Y=%s; Yaw=%sdeg; PDOutput=%s; Steer=%sdeg;" % info_tuple)
+        info_tuple = (y_pos, pd_yaw_out, pd_output, wanted_steer_deg)
+        rospy.loginfo("Y=%s; YawOut=%sdeg; PDOutput=%s; Steer=%sdeg;" % info_tuple)
 
         # SIM(gazebo) = -steer -> right, +steer->left
         # real car = +steer -> right, -steer ->left
         self.steer_ctrl.steer(wanted_steer_deg)
 
-    # def map_output(self, pd_output, yaw_deg):
-    #     inputs = [-1, 0, 1]
-    #     outputs = [30 , -5, 30]
-    #     return np.interp(pd_output, inputs, outputs)
+    def map_output(self, pd_output):
+        #     inputs = [-1, 0, 1]
+        #     outputs = [30 , -5, 30]
+        #     return np.interp(pd_output, inputs, outputs)
+        pd_outputs = [-0.4, -0.05, 0.0, 0.05, 0.4]
+        steering_degrees = [25.0, 5.0, 0.0, -5.0, -25.0]
+        return np.interp(pd_output, pd_outputs, steering_degrees)
 
     def quaternion_to_yaw(self, q):
         ''' yaw=(z-axis rotation) '''
@@ -246,28 +235,22 @@ class OdomReceiver(object):
         plt.grid()
         plt.plot(self.rec_time, self.rec_ycoords)
         plt.show()
-        # rospy.signal_shutdown("Plotted chart")
+        rospy.signal_shutdown("Plotted chart")
 
 
 def main(args):
     rospy.init_node("pd_control")
 
-    SPEED_ARG = -350
-    DRIVE_DURATION = 10
+    SPEED_ARG = -180
+    DRIVE_DURATION = 14
     
     speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     steer_ctrl = SteeringController()
     odom_reciever = OdomReceiver(speed_ctrl, steer_ctrl)
-    # pd_controller = PDController(K_P, K_D, speed_ctrl, steer_ctrl)
 
     # "odom" topic
     rospy.Subscriber("odom", Odometry, odom_reciever.odom_cb, queue_size=1)
-    # time.sleep(0.5)
 
-    # rospy.Timer(rospy.Duration(0.1), lambda _: pbspd.publish(SPEED_ARG), oneshot=True)
-    # rospy.Subscriber("odom", Odometry, odom_cb, queue_size=10)
-    # rospy.Timer(rospy.Duration(5), lambda _: pbspd.publish(0), oneshot=True)
-    # r = rospy.Rate(1)
     try:
         rospy.spin()
     except KeyboardInterrupt:
