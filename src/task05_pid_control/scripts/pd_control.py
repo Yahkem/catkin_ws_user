@@ -82,7 +82,7 @@ class SteeringController(object):
         steering_arg = int(round(deg_interpolated)) #+9 for sim
         rospy.loginfo("SteeringArg=%s" % steering_arg)
 
-        return steering_arg
+        return steering_arg+9
 
 
 class PDController(object):
@@ -107,7 +107,7 @@ class PDController(object):
 
         self.cur_time = time.time()
         delta_time = self.cur_time - self.prev_time
-        print "dtime=%s" % delta_time
+        # print "dtime=%s" % delta_time
 
         if delta_time >= self.sample_time:
             self.p = self.kp * error
@@ -152,6 +152,8 @@ class OdomReceiver(object):
 
         self.has_corrected_yaw = False
         self.has_started = False
+        self.yaw_iters = 10
+        self.yaw_inc = -1
     
     def odom_cb(self, odom_msg):
         # every xth cb
@@ -163,7 +165,7 @@ class OdomReceiver(object):
         position = pose.position
         orientation = pose.orientation
 
-        y_pos = position.y
+        y_pos = -position.y
         yaw = self.quaternion_to_yaw(orientation)
         yaw_deg = np.rad2deg(yaw)
 
@@ -185,23 +187,30 @@ class OdomReceiver(object):
         pd_output = self.pdctrl_distance.update(y_pos)
         pd_yaw_out = self.pdctrl_yaw.update(yaw_deg)
 
+        # if abs(pd_yaw_out) > 10.0:
+        #     self.has_corrected_yaw = False
+        #     self.yaw_inc = 0
+
         # append values to plot
         self.rec_time.append(time.time() - self.init_time)
         self.rec_ycoords.append(y_pos)
 
-        wanted_steer_deg = 0.0
+        # just keeping straight Y
+        wanted_steer_deg = -pd_yaw_out #+ pd_output*10#-pd_yaw_out #0.0 # pd_yaw_out
 
-        if pd_yaw_out == 0.0 and not self.has_corrected_yaw:
-            # initial yaw to 0.0, now we correct dist
-            print "\n------------YAW CORRECTED!!!\n------------\n"
-            self.has_corrected_yaw = True
-        elif self.has_corrected_yaw:
-            wanted_steer_deg = pd_output #self.map_output(pd_output) #-pd_output*15
-        else:
-            wanted_steer_deg = pd_yaw_out
-
-        # wanted_steer_deg = pd_output if self.has_corrected_yaw else -30
-        # wanted_steer_deg = 0#-pd_output*30
+        # TODO - 1st set yaw close to 0.0, then follow the Y line, then correct by y_pos
+        # if abs(pd_yaw_out) < 1.0 and (not self.has_corrected_yaw or self.yaw_inc < self.yaw_iters):
+        #     # initial yaw to 0.0, now we correct dist
+        #     print "1"
+        #     self.has_corrected_yaw = True
+        #     wanted_steer_deg = -pd_yaw_out
+        #     self.yaw_inc += 1
+        # elif self.has_corrected_yaw: # correcting to y=0.2
+        #     print 2
+        #     wanted_steer_deg = pd_output*20 #self.map_output(pd_output) #-pd_output*15
+        # else:
+        #     print 3
+        #     wanted_steer_deg = -20 # initial yaw correction
         
         info_tuple = (y_pos, pd_yaw_out, pd_output, wanted_steer_deg)
         rospy.loginfo("Y=%s; PDYawOut=%sdeg; PDOutput=%s; Steer=%sdeg;" % info_tuple)
@@ -237,14 +246,14 @@ class OdomReceiver(object):
         plt.grid()
         plt.plot(self.rec_time, self.rec_ycoords)
         plt.show()
-        rospy.signal_shutdown("Plotted chart")
+        # rospy.signal_shutdown("Plotted chart")
 
 
 def main(args):
     rospy.init_node("pd_control")
 
-    SPEED_ARG = -180
-    DRIVE_DURATION = 14
+    SPEED_ARG = -170
+    DRIVE_DURATION = 11
     
     speed_ctrl = SpeedController(SPEED_ARG, DRIVE_DURATION)
     steer_ctrl = SteeringController()

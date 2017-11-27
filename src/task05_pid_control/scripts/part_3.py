@@ -107,7 +107,7 @@ class PDController(object):
 
         self.cur_time = time.time()
         delta_time = self.cur_time - self.prev_time
-        print "dtime=%s" % delta_time
+        # print "dtime=%s" % delta_time
 
         if delta_time >= self.sample_time:
             self.p = self.kp * error
