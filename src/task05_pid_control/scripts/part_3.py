@@ -80,8 +80,9 @@ class SteeringController(object):
             degrees = deg_max
         
         deg_interpolated = np.interp(degrees, measured, topic_args)
+        steering_arg = int(round(deg_interpolated)) #+9 for sim
 
-        return int(round(deg_interpolated))
+        return steering_arg
 
 
 class PDController(object):
