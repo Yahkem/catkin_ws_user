@@ -82,7 +82,7 @@ class SteeringController(object):
         steering_arg = int(round(deg_interpolated)) #+9 for sim
         rospy.loginfo("SteeringArg=%s" % steering_arg)
 
-        return steering_arg+9
+        return steering_arg#+9
 
 
 class PDController(object):
