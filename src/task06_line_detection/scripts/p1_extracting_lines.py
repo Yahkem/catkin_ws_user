@@ -75,11 +75,11 @@ class LineExtractor(object):
 
         # sensitivity = 150
         hsv_bot = [0,0,252]
-        hsv_top = [255,35,255] #[150,20,255]
+        hsv_top = [100,35,255] # Hue=<0,179> #[150,20,255]
 
-        # diff = 128
-        ycrcb_bot = [240, 0,0]
-        ycrcb_top = [255, 255,255]
+        diff = 20
+        ycrcb_bot = [240, 128-diff,128-diff]#[240, 0,0]
+        ycrcb_top = [255, 128+diff,128+diff]#[255, 255,255]
 
         print "Bottom HSV=%s" %hsv_bot
         print "Top HSV=%s\n-----------------" % hsv_top
