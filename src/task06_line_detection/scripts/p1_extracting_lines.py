@@ -21,8 +21,8 @@ class LineExtractor(object):
         self.pub_rgb = rospy.Publisher("/image_processing/img_rgb", Image, queue_size=1)
         # rosrun image_view image_view image:=/image_processing/img_hsv
         self.pub_hsv = rospy.Publisher("/image_processing/img_hsv", Image, queue_size=1)
-        # rosrun image_view image_view image:=/image_processing/img_yuv
-        self.pub_yuv = rospy.Publisher("/image_processing/img_yuv", Image, queue_size=1)
+        # rosrun image_view image_view image:=/image_processing/img_ycrcb
+        self.pub_ycrcb = rospy.Publisher("/image_processing/img_ycrcb", Image, queue_size=1)
 
         # rosrun image_view image_view image:=/app/camera/rgb/image_raw
         self.sub_img = rospy.Subscriber("/app/camera/rgb/image_raw", Image, self.process_image_cb, queue_size=1)
@@ -72,23 +72,27 @@ class LineExtractor(object):
         # white_yuv = cv2.cvtColor(white_uint8, cv2.COLOR_BGR2YUV)
         # grey_yuv = cv2.cvtColor(white_uint8, cv2.COLOR_BGR2YUV)
         # grey_yuv[0][0][0] = grey_yuv[0][0][0]-100
-        hsv_bot = [0,0,255]
-        hsv_top = [150,20,255]
-        yuv_bot = [250, 100,0]
-        yuv_top = [255,130,255]
+
+        # sensitivity = 150
+        hsv_bot = [0,0,252]
+        hsv_top = [255,35,255] #[150,20,255]
+
+        # diff = 128
+        ycrcb_bot = [240, 0,0]
+        ycrcb_top = [255, 255,255]
 
         print "Bottom HSV=%s" %hsv_bot
         print "Top HSV=%s\n-----------------" % hsv_top
-        print "Bottom YUV=%s" %yuv_bot
-        print "Top YUV=%s" %yuv_top
+        print "Bottom YCrCb=%s" %ycrcb_bot
+        print "Top YCrCb=%s" %ycrcb_top
 
         img_rgb = self.process_img_as(cv2.COLOR_BGR2RGB, cv_image, grey, white)
         img_hsv = self.process_img_as(cv2.COLOR_BGR2HSV, cv_image, hsv_bot, hsv_top)
-        img_yuv = self.process_img_as(cv2.COLOR_BGR2YUV, cv_image, yuv_bot, yuv_top)
+        img_ycrcb = self.process_img_as(cv2.COLOR_BGR2YCrCb, cv_image, ycrcb_bot, ycrcb_top)
 
         self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(img_rgb, "rgb8"))
         self.pub_hsv.publish(self.bridge.cv2_to_imgmsg(cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB), "rgb8"))
-        self.pub_yuv.publish(self.bridge.cv2_to_imgmsg(cv2.cvtColor(img_yuv, cv2.COLOR_YUV2RGB), "rgb8"))
+        self.pub_ycrcb.publish(self.bridge.cv2_to_imgmsg(cv2.cvtColor(img_ycrcb, cv2.COLOR_YCrCb2RGB), "rgb8"))
 
 
 
