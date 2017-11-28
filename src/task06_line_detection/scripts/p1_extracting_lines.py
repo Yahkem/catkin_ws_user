@@ -17,15 +17,14 @@ class LineExtractor(object):
         self.bridge = CvBridge()
 
         # image publishers
-        #rosrun image_view image_view image:=/image_processing/img_rgb
+        # rosrun image_view image_view image:=/image_processing/img_rgb
         self.pub_rgb = rospy.Publisher("/image_processing/img_rgb", Image, queue_size=1)
-        #rosrun image_view image_view image:=/image_processing/img_hsv
+        # rosrun image_view image_view image:=/image_processing/img_hsv
         self.pub_hsv = rospy.Publisher("/image_processing/img_hsv", Image, queue_size=1)
-        #rosrun image_view image_view image:=/image_processing/img_yuv
+        # rosrun image_view image_view image:=/image_processing/img_yuv
         self.pub_yuv = rospy.Publisher("/image_processing/img_yuv", Image, queue_size=1)
 
-        # TODO image subscr
-        #rosrun image_view image_view image:=/app/camera/rgb/image_raw
+        # rosrun image_view image_view image:=/app/camera/rgb/image_raw
         self.sub_img = rospy.Subscriber("/app/camera/rgb/image_raw", Image, self.process_image_cb, queue_size=1)
 
         rospy.loginfo("LineExtractor instance initialized!")
@@ -60,30 +59,37 @@ class LineExtractor(object):
             print "cv_image is None! byebye..."
             return
 
-        grey = [245,245,245]
         white = [255,255,255]
-        grey_uint8 = np.uint8([[grey]])
-        white_uint8 = np.uint8([[white]])
-        grey_hsv = cv2.cvtColor(grey_uint8, cv2.COLOR_BGR2HSV)
-        white_hsv = cv2.cvtColor(white_uint8, cv2.COLOR_BGR2HSV)
-        grey_yuv = cv2.cvtColor(grey_uint8, cv2.COLOR_BGR2YUV)
-        white_yuv = cv2.cvtColor(white_uint8, cv2.COLOR_BGR2YUV)
+        G=235
+        grey = [G,G,G]
+        # white_uint8 = np.uint8([[white]])
+        # grey_uint8 = np.uint8([[grey]])
+        # # grey_hsv = cv2.cvtColor(grey_uint8, cv2.COLOR_BGR2HSV)
+        # white_hsv = cv2.cvtColor(white_uint8, cv2.COLOR_BGR2HSV)
+        # grey_hsv = cv2.cvtColor(grey_uint8, cv2.COLOR_BGR2HSV)
+        # grey_hsv[0][0][2] = grey_hsv[0][0][2]-50
+        # # grey_hsv[0][0][1] = grey_hsv[0][0][1]
+        # white_yuv = cv2.cvtColor(white_uint8, cv2.COLOR_BGR2YUV)
+        # grey_yuv = cv2.cvtColor(white_uint8, cv2.COLOR_BGR2YUV)
+        # grey_yuv[0][0][0] = grey_yuv[0][0][0]-100
+        hsv_bot = [0,0,255]
+        hsv_top = [150,20,255]
+        yuv_bot = [250, 100,0]
+        yuv_top = [255,130,255]
 
-        print grey_hsv
-        print white_hsv
-        print grey_yuv
-        print white_yuv
+        print "Bottom HSV=%s" %hsv_bot
+        print "Top HSV=%s\n-----------------" % hsv_top
+        print "Bottom YUV=%s" %yuv_bot
+        print "Top YUV=%s" %yuv_top
 
         img_rgb = self.process_img_as(cv2.COLOR_BGR2RGB, cv_image, grey, white)
-        img_hsv = self.process_img_as(cv2.COLOR_BGR2HSV, cv_image, grey_hsv[0][0], white_hsv[0][0])
-        img_yuv = self.process_img_as(cv2.COLOR_BGR2YUV, cv_image, grey_yuv[0][0], white_yuv[0][0])
-        # cv2.imshow('RGB', img_rgb)
+        img_hsv = self.process_img_as(cv2.COLOR_BGR2HSV, cv_image, hsv_bot, hsv_top)
+        img_yuv = self.process_img_as(cv2.COLOR_BGR2YUV, cv_image, yuv_bot, yuv_top)
+
         self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(img_rgb, "rgb8"))
-        self.pub_hsv.publish(self.bridge.cv2_to_imgmsg(img_hsv, "rgb8"))
-        self.pub_yuv.publish(self.bridge.cv2_to_imgmsg(img_yuv, "rgb8"))
-        # TODO
-        # img_hsv = self.process_img_as(cv2.COLOR_BGR2HSV, cv_image, [0,0,200], [0,0,255])
-        # img_yuv = self.process_img_as(cv2.COLOR_BGR2YUV, cv_image, [], [])
+        self.pub_hsv.publish(self.bridge.cv2_to_imgmsg(cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB), "rgb8"))
+        self.pub_yuv.publish(self.bridge.cv2_to_imgmsg(cv2.cvtColor(img_yuv, cv2.COLOR_YUV2RGB), "rgb8"))
+
 
 
 def main(args):
