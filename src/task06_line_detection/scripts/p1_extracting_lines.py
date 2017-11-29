@@ -25,6 +25,8 @@ class LineExtractor(object):
         self.pub_ycrcb = rospy.Publisher("/image_processing/img_ycrcb", Image, queue_size=1)
         # rosrun image_view image_view image:=/image_processing/img_lines
         self.pub_lines = rospy.Publisher("/image_processing/img_lines", Image, queue_size=1)
+        # rosrun image_view image_view image:=/image_processing/eroded
+        self.pub_eroded = rospy.Publisher("/image_processing/eroded", Image, queue_size=1)
 
         # rosrun image_view image_view image:=/app/camera/rgb/image_raw
         self.sub_img = rospy.Subscriber("/app/camera/rgb/image_raw", Image, self.process_image_cb, queue_size=1)
@@ -76,8 +78,8 @@ class LineExtractor(object):
         # grey_yuv[0][0][0] = grey_yuv[0][0][0]-100
 
         # sensitivity = 150
-        hsv_bot = [0,0,252]
-        hsv_top = [100,35,255] # Hue=<0,179> #[150,20,255]
+        hsv_bot = [0,0,245]
+        hsv_top = [100,45,255] # Hue=<0,179> #[150,20,255]
 
         diff = 20
         ycrcb_bot = [240, 128-diff,128-diff]#[240, 0,0]
@@ -99,24 +101,75 @@ class LineExtractor(object):
 
         self.find_lines(img_hsv_rgbspace)
 
-    def erode_lines(self, img):
-        kernel = np.ones((3,3), np.uint8)
+    def erode_image(self, img, iters=1):
+        kernel = np.ones((5,5), np.uint8)
         # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
-        erosion = cv2.erode(img, kernel, iterations=1)
+        erosion = cv2.erode(img, kernel, iterations=iters)
         return erosion
+
+    def dilate_top(self, img, ratio, top=True):
+        height, width, _ = img.shape
+
+        int_height_ratio = int(height/ratio)
+        img_part = img[0:int_height_ratio, 0:width] if top else img[int_height_ratio:height, 0:width]
+
+        kernel = np.ones((5,5), np.uint8)
+        # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
+        dilation = cv2.dilate(img_part,kernel,iterations = 5)
+        
+        if top:
+            img[0:int_height_ratio, 0:width] = dilation
+        else:
+            img[int_height_ratio:height, 0:width] = dilation
+        # self.pub_eroded.publish(self.bridge.cv2_to_imgmsg(img, "rgb8"))
+        return img
+
+    def get_two_lines(self, lines):
+        l1_angles = []
+        l2_angles = []
+
+        for line in lines:
+            if len(l1_angles) == 0:
+                l1_angles.append(line[0])
+                continue
+            # print 11111
+            # print line[0][0]
+            # print l1_angles[0][0][0]
+            if abs(line[0][0]-l1_angles[0][0]) < 100: # should average to same line
+                l1_angles.append(line[0])
+            else: # len(l2_angles) == 0: # the other line
+                l2_angles.append(line[0])
+
+        print "\n\nL1 lines=%s" % l1_angles
+        print "\n\nL2 lines=%s" % l2_angles
+
+
 
     def find_lines(self, img):
         #https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_houghlines/py_houghlines.html
 
-        img_eroded = self.erode_lines(img)
+        img_eroded = self.erode_image(img)
+        img_dilated_top = self.dilate_top(img_eroded, 1.5)
+        # img_dilated_top = self.dilate_top(img_eroded, 3)
+        # img_dilated_top = self.dilate_top(img_dilated_top, 2, False)
+        # img_dilated_top = self.dilate_top(img_eroded, 4)
+        img_eroded = self.erode_image(img_dilated_top,2)
+        
+        # print img_eroded.shape
+        # height, width, _ = img_eroded.shape
+        # eroded_1st_half = img_eroded[0:height/2, 0:width]
         img_gray = cv2.cvtColor(img_eroded, cv2.COLOR_RGB2GRAY)
 
-        # self.pub_lines.publish(self.bridge.cv2_to_imgmsg(img_eroded, "rgb8"))
+        self.pub_eroded.publish(self.bridge.cv2_to_imgmsg(img_eroded, "rgb8"))
         # return
 
         edges = cv2.Canny(img_gray, 50, 150, apertureSize=3)
 
-        lines = cv2.HoughLines(edges, 1, np.pi/180, 150)
+        lines = cv2.HoughLines(edges, 1, np.pi/180, 100)
+
+        # TODO avgs of lines
+        self.get_two_lines(lines)
+        # return
 
         print "lines=%s" %lines
         # two_lines = lines[:2]
