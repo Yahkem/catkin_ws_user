@@ -23,6 +23,8 @@ class LineExtractor(object):
         self.pub_hsv = rospy.Publisher("/image_processing/img_hsv", Image, queue_size=1)
         # rosrun image_view image_view image:=/image_processing/img_ycrcb
         self.pub_ycrcb = rospy.Publisher("/image_processing/img_ycrcb", Image, queue_size=1)
+        # rosrun image_view image_view image:=/image_processing/img_lines
+        self.pub_lines = rospy.Publisher("/image_processing/img_lines", Image, queue_size=1)
 
         # rosrun image_view image_view image:=/app/camera/rgb/image_raw
         self.sub_img = rospy.Subscriber("/app/camera/rgb/image_raw", Image, self.process_image_cb, queue_size=1)
@@ -91,9 +93,50 @@ class LineExtractor(object):
         img_ycrcb = self.process_img_as(cv2.COLOR_BGR2YCrCb, cv_image, ycrcb_bot, ycrcb_top)
 
         self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(img_rgb, "rgb8"))
-        self.pub_hsv.publish(self.bridge.cv2_to_imgmsg(cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB), "rgb8"))
+        img_hsv_rgbspace = cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB)
+        self.pub_hsv.publish(self.bridge.cv2_to_imgmsg(img_hsv_rgbspace, "rgb8"))
         self.pub_ycrcb.publish(self.bridge.cv2_to_imgmsg(cv2.cvtColor(img_ycrcb, cv2.COLOR_YCrCb2RGB), "rgb8"))
 
+        self.find_lines(img_hsv_rgbspace)
+
+    def erode_lines(self, img):
+        kernel = np.ones((3,3), np.uint8)
+        # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
+        erosion = cv2.erode(img, kernel, iterations=1)
+        return erosion
+
+    def find_lines(self, img):
+        #https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_houghlines/py_houghlines.html
+
+        img_eroded = self.erode_lines(img)
+        img_gray = cv2.cvtColor(img_eroded, cv2.COLOR_RGB2GRAY)
+
+        # self.pub_lines.publish(self.bridge.cv2_to_imgmsg(img_eroded, "rgb8"))
+        # return
+
+        edges = cv2.Canny(img_gray, 50, 150, apertureSize=3)
+
+        lines = cv2.HoughLines(edges, 1, np.pi/180, 150)
+
+        print "lines=%s" %lines
+        # two_lines = lines[:2]
+        # print "two_lines=%s" %two_lines
+        for line in lines:
+            for rho,theta in line:
+                a = np.cos(theta)
+                b = np.sin(theta)
+                x0 = a*rho
+                y0 = b*rho
+                x1 = int(x0 + 1000*(-b))
+                y1 = int(y0 + 1000*(a))
+                x2 = int(x0 - 1000*(-b))
+                y2 = int(y0 - 1000*(a))
+
+                print_tuple = (a,b,x0,y0, x1,y1, x2,y2)
+                print "Line!\na=%s; b=%s; x0=%s; y0=%s;  x1=%s; y1=%s;  x2=%s; y2=%s" % print_tuple
+                cv2.line(img,(x1,y1),(x2,y2),(255,0,0),2)
+            # break
+        self.pub_lines.publish(self.bridge.cv2_to_imgmsg(img, "rgb8"))
 
 
 def main(args):
