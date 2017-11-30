@@ -5,10 +5,9 @@ import rospy
 import cv2
 import numpy as np
 import math
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-# from operator import itemgetter
 
 class LineExtractor(object):
     
@@ -17,33 +16,32 @@ class LineExtractor(object):
         self.bridge = CvBridge()
 
         # image publishers
+        # 2. Color spaces - RGB, HSV, YCrCb
         # rosrun image_view image_view image:=/image_processing/img_rgb
         self.pub_rgb = rospy.Publisher("/image_processing/img_rgb", Image, queue_size=1)
         # rosrun image_view image_view image:=/image_processing/img_hsv
         self.pub_hsv = rospy.Publisher("/image_processing/img_hsv", Image, queue_size=1)
         # rosrun image_view image_view image:=/image_processing/img_ycrcb
         self.pub_ycrcb = rospy.Publisher("/image_processing/img_ycrcb", Image, queue_size=1)
+
+        # 3. Image with lines
         # rosrun image_view image_view image:=/image_processing/img_lines
         self.pub_lines = rospy.Publisher("/image_processing/img_lines", Image, queue_size=1)
+        # image for 
         # rosrun image_view image_view image:=/image_processing/eroded
         self.pub_eroded = rospy.Publisher("/image_processing/eroded", Image, queue_size=1)
+        
+        # 3. Publishers of line parameters m,b
+        # rostopic echo /line_params/m
+        self.pub_param_m = rospy.Publisher("/line_params/m", Float32, queue_size=1)
+        # rostopic echo /line_params/b
+        self.pub_param_b = rospy.Publisher("/line_params/b", Float32, queue_size=1)
 
+        # Subscriber
         # rosrun image_view image_view image:=/app/camera/rgb/image_raw
         self.sub_img = rospy.Subscriber("/app/camera/rgb/image_raw", Image, self.process_image_cb, queue_size=1)
 
         rospy.loginfo("LineExtractor instance initialized!")
-
-    def process_img_as(self, cv2_constant, img, lower_bound, upper_bound):
-        img_converted = cv2.cvtColor(img, cv2_constant)
-
-        lower_bound_np = np.array(lower_bound)
-        upper_bound_np = np.array(upper_bound)
-
-        mask = cv2.inRange(img_converted, lower_bound_np, upper_bound_np)
-
-        result = cv2.bitwise_and(img_converted, img_converted, mask=mask)
-
-        return result
 
     def convert_imgmsg(self, img_msg):
         cv_image = None
@@ -61,133 +59,73 @@ class LineExtractor(object):
 
         cv_image = self.convert_imgmsg(img_msg)
 
-        if cv_image is None: print "cv_image is None! Nothing to do..."; return
+        if cv_image is None: rospy.loginfo("cv_image is None! Nothing to do..."); return
 
-        white = [255,255,255]
+        white = [255, 255, 255]
         GREY_VAL=235
         grey = [GREY_VAL, GREY_VAL, GREY_VAL]
 
-        # sensitivity = 150
-        hsv_bot = [0,0,245]
-        hsv_top = [100,45,255] # Hue=<0,179> #[150,20,255]
+        hsv_bot = [0, 0, 245]
+        hsv_top = [100, 45, 255] # Hue=<0,179> #[150,20,255]
 
         diff = 20
-        ycrcb_bot = [240, 128-diff,128-diff]#[240, 0,0]
-        ycrcb_top = [255, 128+diff,128+diff]#[255, 255,255]
+        ycrcb_bot = [240, 128-diff, 128-diff]#[240, 0,0]
+        ycrcb_top = [255, 128+diff, 128+diff]#[255, 255,255]
 
-        print "Bottom RGB=%s" % grey
-        print "Top RGB=%s" %white
-        print "Bottom HSV=%s" %hsv_bot
-        print "Top HSV=%s" % hsv_top
-        print "Bottom YCrCb=%s" %ycrcb_bot
-        print "Top YCrCb=%s" %ycrcb_top
+        rospy.loginfo("Bottom RGB=%s" % grey)
+        rospy.loginfo("Top RGB=%s" % white)
+        rospy.loginfo("Bottom HSV=%s" % hsv_bot)
+        rospy.loginfo("Top HSV=%s" % hsv_top)
+        rospy.loginfo("Bottom YCrCb=%s" % ycrcb_bot)
+        rospy.loginfo("Top YCrCb=%s" % ycrcb_top)
 
         img_rgb = self.process_img_as(cv2.COLOR_BGR2RGB, cv_image, grey, white)
         img_hsv = self.process_img_as(cv2.COLOR_BGR2HSV, cv_image, hsv_bot, hsv_top)
         img_ycrcb = self.process_img_as(cv2.COLOR_BGR2YCrCb, cv_image, ycrcb_bot, ycrcb_top)
 
-        self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(img_rgb, "rgb8"))
         img_hsv_rgbspace = cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB)
-        self.pub_hsv.publish(self.bridge.cv2_to_imgmsg(img_hsv_rgbspace, "rgb8"))
         img_ycrcb_rgbspace = cv2.cvtColor(img_ycrcb, cv2.COLOR_YCrCb2RGB)
+
+        self.pub_rgb.publish(self.bridge.cv2_to_imgmsg(img_rgb, "rgb8"))
+        self.pub_hsv.publish(self.bridge.cv2_to_imgmsg(img_hsv_rgbspace, "rgb8"))
         self.pub_ycrcb.publish(self.bridge.cv2_to_imgmsg(img_ycrcb_rgbspace, "rgb8"))
 
-        self.find_lines(img_hsv_rgbspace)
+        self.find_lines(img_hsv_rgbspace) # 3. part of the task - find lines and get parameters
 
         rospy.loginfo("Subscriber has processed the image")
 
-    def erode_image(self, img, iters=1):
-        kernel = np.ones((5,5), np.uint8)
-        # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
-        erosion = cv2.erode(img, kernel, iterations=iters)
-        return erosion
+    def process_img_as(self, cv2_constant, img, lower_bound, upper_bound):
+        ''' Processes the image by mask with supplied bounds in a given color space '''
+        img_converted = cv2.cvtColor(img, cv2_constant)
 
-    def dilate_top(self, img, ratio):
-        height, width, _ = img.shape
+        lower_bound_np = np.array(lower_bound)
+        upper_bound_np = np.array(upper_bound)
 
-        int_height_ratio = int(height/ratio)
-        img_part = img[0:int_height_ratio, 0:width] #if top else img[int_height_ratio:height, 0:width]
+        mask = cv2.inRange(img_converted, lower_bound_np, upper_bound_np)
 
-        kernel = np.ones((5,5), np.uint8)
-        # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
-        dilation = cv2.dilate(img_part,kernel,iterations = 5)
-        
-        # if top:
-        img[0:int_height_ratio, 0:width] = dilation
-        # else:
-        #     img[int_height_ratio:height, 0:width] = dilation
-        # self.pub_eroded.publish(self.bridge.cv2_to_imgmsg(img, "rgb8"))
-        return img
+        result = cv2.bitwise_and(img_converted, img_converted, mask=mask)
 
-    def get_two_lines(self, lines):
-        ''' averages the obtained lines into 2 lines, based on the angle difference '''
-        l1_angles = []
-        l2_angles = []
-
-        for line in lines:
-            if len(l1_angles) == 0:
-                l1_angles.append(line[0]) # 1st iter
-            elif abs(line[0][0]-l1_angles[0][0]) < 50: # TODO param should average to same line
-                l1_angles.append(line[0]) # similar line to the 1st
-            else: 
-                l2_angles.append(line[0] )# the other line
-
-        print "\n\nL1 lines=%s" % l1_angles
-        print "\n\nL2 lines=%s" % l2_angles
-
-        get_col = lambda mat,idx: [row[idx] for row in mat]
-        avg_list = lambda l: reduce(lambda x,y: x+y, l) / len(l)
-
-        l1_rho = avg_list(get_col(l1_angles, 0))
-        l1_theta = avg_list(get_col(l1_angles, 1))
-        l2_rho = avg_list(get_col(l2_angles, 0))
-        l2_theta = avg_list(get_col(l2_angles, 1))
-
-        print "\n---\nL1 rho=%s" % l1_rho
-        print "L1 theta=%s" % l1_theta
-        print "L2 rho=%s" % l2_rho
-        print "L2 theta=%s\n---\n" % l2_theta
-
-        l1 = [l1_rho, l1_theta]
-        l2 = [l2_rho, l2_theta]
-
-        return [l1, l2]
- 
-
-    def get_m_and_b(self, x1,y1, x2,y2):
-        x1=float(x1); y1=float(y1); x2=float(x2); y2=float(y2)
-        # y=mx+b
-        m = (y2-y1) / (x2-x1) # m=Dy/Dx
-        b = y1 - m*x1 # b=y-mx
-        
-        # assert b == (y2-m*x2) # jen pro sichr
-
-        return (m,b)
+        return result
 
     def find_lines(self, img):
         #https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_houghlines/py_houghlines.html
 
         img_eroded = self.erode_image(img) # get rid of noise
         img_dilated_top = self.dilate_top(img_eroded, 1.5) # make upper part of the lines thicker
-        img_eroded = self.erode_image(img_dilated_top,2) # erode again
+        img_eroded = self.erode_image(img_dilated_top, 2) # erode again
         
-        # print img_eroded.shape
-        # height, width, _ = img_eroded.shape
-        # eroded_1st_half = img_eroded[0:height/2, 0:width]
-        img_gray = cv2.cvtColor(img_eroded, cv2.COLOR_RGB2GRAY)
-
         self.pub_eroded.publish(self.bridge.cv2_to_imgmsg(img_eroded, "rgb8"))
-        # return
 
+        # Get all lines
+        img_gray = cv2.cvtColor(img_eroded, cv2.COLOR_RGB2GRAY)
         edges = cv2.Canny(img_gray, 50, 150, apertureSize=3)
-
         lines = cv2.HoughLines(edges, 1, np.pi/180, 100)
 
+        # Approximate into 2 lines
         two_lines = self.get_two_lines(lines)
-        # print "TwoLines=%s" % two_lines
-        # return
 
-        LINE_COLOR = (255, 0, 0) # red
+        LINE_COLOR = (255, 0, 0)
+
         for line in two_lines:
             rho = line[0]
             theta = line[1]
@@ -202,22 +140,96 @@ class LineExtractor(object):
             y2 = int(y0 - 1000*(a))
 
             print_tuple = (a,b,x0,y0, x1,y1, x2,y2)
-            print "Line!\na=%s; b=%s; x0=%s; y0=%s;  x1=%s; y1=%s;  x2=%s; y2=%s" % print_tuple
+            rospy.loginfo("Line!\na=%s; b=%s; x0=%s; y0=%s;  x1=%s; y1=%s;  x2=%s; y2=%s" % print_tuple)
 
+            # 3. Draw the line
             cv2.line(img, (x1,y1), (x2,y2), LINE_COLOR, 2)
 
             m,b = self.get_m_and_b(x1,y1, x2,y2)
-            print "---\nm=%s\nb=%s---" % (m,b)
-            # TODO publish params
+            rospy.loginfo("PARAMETERS:")
+            rospy.loginfo("m=%s" % m)
+            rospy.loginfo("b=%s" % b)
 
+            # Publish parameters
+            self.pub_param_b.publish(b)
+            self.pub_param_m.publish(m)
+            
             # break
+
+        # Finally publish image with lines
         self.pub_lines.publish(self.bridge.cv2_to_imgmsg(img, "rgb8"))
+
+    def erode_image(self, img, iters=1):
+        kernel = np.ones((5,5), np.uint8)
+        erosion = cv2.erode(img, kernel, iterations=iters)
+        return erosion
+
+    def dilate_top(self, img, ratio):
+        ''' Dilates given top part of image '''
+        height, width, _ = img.shape
+
+        int_height_ratio = int(height/ratio)
+        img_part = img[0:int_height_ratio, 0:width] # Get upper part
+
+        kernel = np.ones((5,5), np.uint8)
+        dilation = cv2.dilate(img_part,kernel,iterations = 5) # Dilate
+        
+        img[0:int_height_ratio, 0:width] = dilation # Replace original part with the dilated one
+
+        return img
+
+    def get_two_lines(self, lines):
+        ''' Averages the obtained lines into 2 lines, based on the angle difference '''
+        
+        ANGLE_TRESHOLD = 50
+        
+        l1_angles = []
+        l2_angles = []
+
+        for line in lines:
+            if len(l1_angles) == 0:
+                l1_angles.append(line[0]) # 1st iter
+            elif abs(line[0][0]-l1_angles[0][0]) < ANGLE_TRESHOLD: # TODO param should average to same line
+                l1_angles.append(line[0]) # similar line to the 1st
+            else: 
+                l2_angles.append(line[0] )# the other line
+
+        rospy.loginfo("L1 lines=%s" % l1_angles)
+        rospy.loginfo("L2 lines=%s" % l2_angles)
+
+        get_col = lambda mat,idx: [row[idx] for row in mat]
+        avg_list = lambda l: reduce(lambda x,y: x+y, l) / len(l)
+
+        l1_rho = avg_list(get_col(l1_angles, 0))
+        l1_theta = avg_list(get_col(l1_angles, 1))
+        l2_rho = avg_list(get_col(l2_angles, 0))
+        l2_theta = avg_list(get_col(l2_angles, 1))
+
+        rospy.loginfo("L1 rho=%s" % l1_rho)
+        rospy.loginfo("L1 theta=%s" % l1_theta)
+        rospy.loginfo("L2 rho=%s" % l2_rho)
+        rospy.loginfo("L2 theta=%s" % l2_theta)
+
+        l1 = [l1_rho, l1_theta]
+        l2 = [l2_rho, l2_theta]
+
+        return [l1, l2]
+
+    def get_m_and_b(self, x1,y1, x2,y2):
+        ''' Gets parameters m,b from line points based on the line equation y=mx+b '''
+
+        x1=float(x1); y1=float(y1); x2=float(x2); y2=float(y2)
+
+        m = (y2-y1) / (x2-x1) # m=Dy/Dx
+        b = y1 - m*x1 # b=y-mx
+
+        return (m,b)
 
 
 def main(args):
     rospy.init_node('line_extractor', anonymous=True)
 
-    line_extractor = LineExtractor()
+    line_extractor = LineExtractor() # Create LineExtractor object and listen to iamge messages
 
     try:
         rospy.spin()
