@@ -124,7 +124,7 @@ class LineExtractor(object):
         # Approximate into 2 lines
         two_lines = self.get_two_lines(lines)
 
-        LINE_COLOR = (255, 0, 0)
+        LINE_COLOR = (0, 0, 255) # BGR
 
         for line in two_lines:
             rho = line[0]
@@ -155,7 +155,7 @@ class LineExtractor(object):
             self.pub_param_m.publish(m)
 
         # Finally publish the original image with lines
-        self.pub_lines.publish(self.bridge.cv2_to_imgmsg(orig_img, "rgb8"))
+        self.pub_lines.publish(self.bridge.cv2_to_imgmsg(orig_img, "bgr8"))
 
     def erode_image(self, img, iters=1):
         kernel = np.ones((5,5), np.uint8)
