@@ -61,16 +61,16 @@ class LineExtractor(object):
 
         if cv_image is None: rospy.loginfo("cv_image is None! Nothing to do..."); return
 
-        white = [255, 255, 255]
         GREY_VAL=235
         grey = [GREY_VAL, GREY_VAL, GREY_VAL]
+        white = [255, 255, 255]
 
         hsv_bot = [0, 0, 245]
-        hsv_top = [100, 45, 255] # Hue=<0,179> #[150,20,255]
+        hsv_top = [100, 45, 255] # Hue=<0,179>
 
         diff = 20
-        ycrcb_bot = [240, 128-diff, 128-diff]#[240, 0,0]
-        ycrcb_top = [255, 128+diff, 128+diff]#[255, 255,255]
+        ycrcb_bot = [240, 128-diff, 128-diff]
+        ycrcb_top = [255, 128+diff, 128+diff]
 
         rospy.loginfo("Bottom RGB=%s" % grey)
         rospy.loginfo("Top RGB=%s" % white)
@@ -90,7 +90,7 @@ class LineExtractor(object):
         self.pub_hsv.publish(self.bridge.cv2_to_imgmsg(img_hsv_rgbspace, "rgb8"))
         self.pub_ycrcb.publish(self.bridge.cv2_to_imgmsg(img_ycrcb_rgbspace, "rgb8"))
 
-        self.find_lines(img_hsv_rgbspace) # 3. part of the task - find lines and get parameters
+        self.find_lines(img_hsv_rgbspace, cv_image) # 3. part of the task - find lines and get parameters
 
         rospy.loginfo("Subscriber has processed the image")
 
@@ -107,7 +107,7 @@ class LineExtractor(object):
 
         return result
 
-    def find_lines(self, img):
+    def find_lines(self, img, orig_img):
         #https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_houghlines/py_houghlines.html
 
         img_eroded = self.erode_image(img) # get rid of noise
@@ -129,7 +129,7 @@ class LineExtractor(object):
         for line in two_lines:
             rho = line[0]
             theta = line[1]
-            # for rho,theta in line:
+            
             a = np.cos(theta)
             b = np.sin(theta)
             x0 = a*rho
@@ -143,7 +143,7 @@ class LineExtractor(object):
             rospy.loginfo("Line!\na=%s; b=%s; x0=%s; y0=%s;  x1=%s; y1=%s;  x2=%s; y2=%s" % print_tuple)
 
             # 3. Draw the line
-            cv2.line(img, (x1,y1), (x2,y2), LINE_COLOR, 2)
+            cv2.line(orig_img, (x1,y1), (x2,y2), LINE_COLOR, 2)
 
             m,b = self.get_m_and_b(x1,y1, x2,y2)
             rospy.loginfo("PARAMETERS:")
@@ -153,11 +153,9 @@ class LineExtractor(object):
             # Publish parameters
             self.pub_param_b.publish(b)
             self.pub_param_m.publish(m)
-            
-            # break
 
-        # Finally publish image with lines
-        self.pub_lines.publish(self.bridge.cv2_to_imgmsg(img, "rgb8"))
+        # Finally publish the original image with lines
+        self.pub_lines.publish(self.bridge.cv2_to_imgmsg(orig_img, "rgb8"))
 
     def erode_image(self, img, iters=1):
         kernel = np.ones((5,5), np.uint8)
@@ -189,10 +187,10 @@ class LineExtractor(object):
         for line in lines:
             if len(l1_angles) == 0:
                 l1_angles.append(line[0]) # 1st iter
-            elif abs(line[0][0]-l1_angles[0][0]) < ANGLE_TRESHOLD: # TODO param should average to same line
+            elif abs(line[0][0]-l1_angles[0][0]) < ANGLE_TRESHOLD:
                 l1_angles.append(line[0]) # similar line to the 1st
             else: 
-                l2_angles.append(line[0] )# the other line
+                l2_angles.append(line[0] ) # the other line
 
         rospy.loginfo("L1 lines=%s" % l1_angles)
         rospy.loginfo("L2 lines=%s" % l2_angles)
@@ -229,7 +227,7 @@ class LineExtractor(object):
 def main(args):
     rospy.init_node('line_extractor', anonymous=True)
 
-    line_extractor = LineExtractor() # Create LineExtractor object and listen to iamge messages
+    line_extractor = LineExtractor() # Create LineExtractor object and listen to image messages
 
     try:
         rospy.spin()
