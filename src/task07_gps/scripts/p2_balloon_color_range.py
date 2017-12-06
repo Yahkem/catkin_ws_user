@@ -59,7 +59,7 @@ class BulbColorDetector(object):
         # rosrun image_view image_view image:=/usb_cam/image_raw
         self.sub_distorted = rospy.Subscriber("/usb_cam/image_raw", Image, self.detect_bulbs, queue_size=1)
 
-        # 3. Publishers of x and y image coordinates of the color bulbs
+        # Publishers of x and y image coordinates of the color bulbs
         # rostopic echo /bulb_coords/x
         self.pub_coord_x = rospy.Publisher("/bulb_coords/x", Int32, queue_size=1)
         # rostopic echo /bulb_coords/y
@@ -72,8 +72,7 @@ class BulbColorDetector(object):
 
         cv_image = self.convert_imgmsg_to_bgr(img_msg)
         if cv_image is None: rospy.loginfo("cv_image is None! Nothing to do..."); return
-
-        # return 
+ 
         for bulb in self.bulbs:
             lower = np.array(bulb.lower_bound, np.uint8)
             upper = np.array(bulb.upper_bound, np.uint8)
@@ -90,6 +89,7 @@ class BulbColorDetector(object):
 
             points = np.array(points) # [[x,y], [x2,y2]...[]]
             # print points
+            
             x_coords = sorted(self.get_col(points, 0))
             y_coords = sorted(self.get_col(points, 1))
 
