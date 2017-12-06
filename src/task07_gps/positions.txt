@@ -1,0 +1,19 @@
+POSITION 1
+
+x = 189
+y = 200
+dir = y = (0, 1)
+
+
+POSITION 2
+
+x = 347
+y = 80
+dir = -x+y = (-1, 1)
+
+
+POSITION 3
+
+x = 345
+y = 236
+dir = -y = (0, -1)
