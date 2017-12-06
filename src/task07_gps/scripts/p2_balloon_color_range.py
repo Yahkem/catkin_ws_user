@@ -4,10 +4,9 @@ import sys
 import rospy
 import cv2
 import numpy as np
-import math
 from scipy import stats
-from std_msgs.msg import String, Int32
-from sensor_msgs.msg import Image, CompressedImage
+from std_msgs.msg import Int32
+from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 # purple,green,blue,red
 # clustering
@@ -24,7 +23,7 @@ class ColorBulb(object):
         self.name = name
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
-        self.x_img = -1.
+        self.x_img = -1
         self.y_img = -1
         self.x_real = real_coords[0]
         self.y_real = real_coords[1]
@@ -45,7 +44,7 @@ class BulbColorDetector(object):
         #     ([0, 0, 130], [30, 50, 255]), # R
         #     ([200, 50, 130], [255, 100, 230]) # P
         # ]
-        
+
         # BGR
         self.bulb_blue = ColorBulb("Blue", BULB_BLUE, [225, 0, 0], [255, 70, 50])
         self.bulb_green = ColorBulb("Green", BULB_GREEN, [0, 100, 0], [60, 200, 40])
@@ -70,9 +69,6 @@ class BulbColorDetector(object):
         self.pub_coord_y = rospy.Publisher("/bulb_coords/y", Int32, queue_size=1)
 
         rospy.loginfo("BulbColorDetector instance initialized!")
-
-    def get_col(self, data, idx):
-        return [row[idx] for row in data]
 
     def detect_bulbs(self, img_msg):
         rospy.loginfo("Subscriber has recieved the image")
@@ -121,6 +117,8 @@ class BulbColorDetector(object):
 
         rospy.loginfo("Subscriber has processed the image")
 
+    def get_col(self, data, idx):
+        return [row[idx] for row in data]
 
     def convert_imgmsg_to_bgr(self, img_msg):
         cv_image = None
