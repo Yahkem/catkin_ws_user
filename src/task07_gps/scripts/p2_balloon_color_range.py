@@ -8,11 +8,8 @@ from scipy import stats
 from std_msgs.msg import Int32
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
-# purple,green,blue,red
-# clustering
-# hsv? differenct space?
-# if dyn. color range-> describe, not paste
 
+# Real coords in [cm]
 BULB_GREEN = [229, 114]
 BULB_PURPLE = [229, 240]
 BULB_RED = [355, 303]
