@@ -10,35 +10,32 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 import json
 
-# Real coords in [cm]
 from ColorBulb import ColorBulb
 
+# Real coords in [cm]
 BULB_GREEN = [229, 114]
 BULB_PURPLE = [229, 240]
 BULB_RED = [355, 303]
 BULB_BLUE = [418, 177]
 
-
-
 class BulbColorDetector(object):
     
     def __init__(self):
         rospy.loginfo("Initializing BulbColorDetector instance...")
-
+        
         self.bridge = CvBridge()
-
-        # self.color_ranges_bgr = [
-        #     ([225, 0, 0], [255, 70, 50]), # B
-        #     ([0, 100, 0], [60, 200, 40]), # G
-        #     ([0, 0, 130], [30, 50, 255]), # R
-        #     ([200, 50, 130], [255, 100, 230]) # P
-        # ]
 
         # BGR
         self.bulb_blue = ColorBulb("Blue", BULB_BLUE, [225, 0, 0], [255, 70, 50])
         self.bulb_green = ColorBulb("Green", BULB_GREEN, [0, 100, 0], [60, 200, 40])
+        self.bulb_red = ColorBulb("Red", BULB_RED, [0, 0, 110], [50, 75, 255])
+        self.bulb_purple = ColorBulb("Purple", BULB_PURPLE, [200, 50, 110], [255, 100, 230])
+        '''
+        self.bulb_blue = ColorBulb("Blue", BULB_BLUE, [225, 0, 0], [255, 70, 50])
+        self.bulb_green = ColorBulb("Green", BULB_GREEN, [0, 100, 0], [60, 200, 40])
         self.bulb_red = ColorBulb("Red", BULB_RED, [0, 0, 130], [50, 75, 255])
         self.bulb_purple = ColorBulb("Purple", BULB_PURPLE, [200, 50, 130], [255, 100, 230])
+        '''
 
         self.bulbs = [
             self.bulb_blue,
