@@ -5,28 +5,20 @@ import rospy
 import cv2
 import numpy as np
 from scipy import stats
-from std_msgs.msg import Int32
+from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
+import json
 
 # Real coords in [cm]
+from ColorBulb import ColorBulb
+
 BULB_GREEN = [229, 114]
 BULB_PURPLE = [229, 240]
 BULB_RED = [355, 303]
 BULB_BLUE = [418, 177]
 
-class ColorBulb(object):
-    def __init__(self, name, real_coords, lower_bound, upper_bound):
-        self.name = name
-        self.lower_bound = lower_bound
-        self.upper_bound = upper_bound
-        self.x_img = -1
-        self.y_img = -1
-        self.x_real = real_coords[0]
-        self.y_real = real_coords[1]
 
-    def img_coords_str(self):
-        return "%s bulb has image coordinates = [%s,%s]px" % (self.name, self.x_img, self.y_img)
 
 class BulbColorDetector(object):
     
@@ -57,13 +49,11 @@ class BulbColorDetector(object):
 
         # RAW=1..3-exposed
         # rosrun image_view image_view image:=/usb_cam/image_raw
-        self.sub_distorted = rospy.Subscriber("/usb_cam/image_raw", Image, self.detect_bulbs, queue_size=1)
+        self.sub_distorted = rospy.Subscriber("/image_processing/img_undistorted", Image, self.detect_bulbs, queue_size=1)
 
         # Publishers of x and y image coordinates of the color bulbs
-        # rostopic echo /bulb_coords/x
-        self.pub_coord_x = rospy.Publisher("/bulb_coords/x", Int32, queue_size=1)
-        # rostopic echo /bulb_coords/y
-        self.pub_coord_y = rospy.Publisher("/bulb_coords/y", Int32, queue_size=1)
+        # rostopic echo /bulb_coords/red
+        self.pub_coords = rospy.Publisher("/bulb_coords", String, queue_size=1)
 
         rospy.loginfo("BulbColorDetector instance initialized!")
 
@@ -81,6 +71,10 @@ class BulbColorDetector(object):
             output = cv2.bitwise_and(cv_image, cv_image, mask=mask)
 
             non0 = cv2.findNonZero(mask) # [[[x,y]], [[x2,y2]], ... [[]]] <- WTF is this
+            if non0 is None:  # lamp not found
+                bulb.x_img = -1
+                bulb.y_img = -1
+                continue
             # print non0
 
             points = []
@@ -105,12 +99,11 @@ class BulbColorDetector(object):
             rospy.loginfo(bulb.img_coords_str())
 
             # Publish coords
-            self.pub_coord_x.publish(bulb.x_img)
-            self.pub_coord_y.publish(bulb.y_img)
 
             # UNCOMMENT in order to see the image and output from the mask
             # cv2.imshow("images", np.hstack([cv_image, output]))
             # cv2.waitKey(0)
+        self.pub_coords.publish(json.dumps({'width': len(cv_image[0]), 'height': len(cv_image), 'bulbs': [bulb.save_serializable() for bulb in self.bulbs]}))
 
         rospy.loginfo("Subscriber has processed the image")
 
