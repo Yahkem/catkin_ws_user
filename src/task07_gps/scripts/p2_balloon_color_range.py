@@ -9,21 +9,31 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 import json
-
-from ColorBulb import ColorBulb
+import os
 
 # Real coords in [cm]
+from ColorBulb import ColorBulb
+
 BULB_GREEN = [229, 114]
 BULB_PURPLE = [229, 240]
 BULB_RED = [355, 303]
 BULB_BLUE = [418, 177]
 
+
+
 class BulbColorDetector(object):
     
     def __init__(self):
         rospy.loginfo("Initializing BulbColorDetector instance...")
-        
+
         self.bridge = CvBridge()
+
+        # self.color_ranges_bgr = [
+        #     ([225, 0, 0], [255, 70, 50]), # B
+        #     ([0, 100, 0], [60, 200, 40]), # G
+        #     ([0, 0, 130], [30, 50, 255]), # R
+        #     ([200, 50, 130], [255, 100, 230]) # P
+        # ]
 
         # BGR
         self.bulb_blue = ColorBulb("Blue", BULB_BLUE, [225, 0, 0], [255, 70, 50])
@@ -52,10 +62,14 @@ class BulbColorDetector(object):
         # rostopic echo /bulb_coords/red
         self.pub_coords = rospy.Publisher("/bulb_coords", String, queue_size=1)
 
+        # Setting up camera exposure
+        os.system("v4l2-ctl --device=/dev/usb_cam --set-ctrl exposure_auto=1")
+        os.system("v4l2-ctl --device=/dev/usb_cam --set-ctrl exposure_absolute=3")
+
         rospy.loginfo("BulbColorDetector instance initialized!")
 
     def detect_bulbs(self, img_msg):
-        rospy.loginfo("Subscriber has recieved the image")
+        #rospy.loginfo("Subscriber has recieved the image")
 
         cv_image = self.convert_imgmsg_to_bgr(img_msg)
         if cv_image is None: rospy.loginfo("cv_image is None! Nothing to do..."); return
@@ -93,7 +107,7 @@ class BulbColorDetector(object):
             bulb.x_img = int(round(x_trimmed_mean))
             bulb.y_img = int(round(y_trimmed_mean))
 
-            rospy.loginfo(bulb.img_coords_str())
+            #rospy.loginfo(bulb.img_coords_str())
 
             # Publish coords
 
@@ -102,7 +116,7 @@ class BulbColorDetector(object):
             # cv2.waitKey(0)
         self.pub_coords.publish(json.dumps({'width': len(cv_image[0]), 'height': len(cv_image), 'bulbs': [bulb.save_serializable() for bulb in self.bulbs]}))
 
-        rospy.loginfo("Subscriber has processed the image")
+        #rospy.loginfo("Subscriber has processed the image")
 
     def get_col(self, data, idx):
         return [row[idx] for row in data]

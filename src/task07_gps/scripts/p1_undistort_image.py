@@ -62,7 +62,7 @@ class ImageUndistorter(object):
         return cv_image
 
     def undistort_image(self, img_msg):
-        rospy.loginfo("Subscriber has recieved the image")
+        #rospy.loginfo("Subscriber has recieved the image")
 
         cv_image = self.convert_imgmsg_to_bgr(img_msg)
         if cv_image is None: rospy.loginfo("cv_image is None! Nothing to do..."); return
@@ -88,7 +88,7 @@ class ImageUndistorter(object):
         undistorted_img_msg = self.bridge.cv2_to_imgmsg(undistorted_img, "bgr8")
         self.pub_undistorted.publish(undistorted_img_msg)
 
-        rospy.loginfo("Subscriber has processed the image")
+        #rospy.loginfo("Subscriber has processed the image")
 
         # cv2.imshow("original | undistorted", np.hstack([cv_image, undistorted_img]))
         # cv2.waitKey(0)
