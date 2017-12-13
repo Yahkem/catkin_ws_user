@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
 import sys
+import os
+import time
+import tf
+import json
 import rospy
 import cv2
-import json
-import os
-import tf
 import numpy as np
 from scipy import stats
 from std_msgs.msg import String
@@ -19,19 +20,70 @@ class KalmanFilter(object):
     def __init__(self):
         rospy.loginfo("Initializing KalmanFilter instance...")
 
-        # rospy.Publisher("/global_position/odom", Odometry, queue_size=1)
-        self.sub_distorted = rospy.Subscriber("/global_position/odom", Odometry, self.process_odom, queue_size=1)
+        # init values
+        # self.position_odom= None
+        # self.orientation_odom= None
+        self.pred_x = 0.0
+        self.pred_y = 0.0
+        self.pred_x_prev = 0.0
+        self.pred_y_prev = 0.0
+        self.pred_theta = 0.0
+        self.pred_theta_prev = 0.0
+        self.upd_x = 0.0
+        self.upd_y = 0.0
+        self.upd_x_prev = 0.0
+        self.upd_x_prev = 0.0
+        self.upd_theta = 0.0
+        self.upd_theta_prev = 0.0
+
+        # change of the car in x,y coords; prefix d_ == delta
+        self.d_pred_x = 0.0
+        self.d_pred_y = 0.0
+        self.d_upd_x = 0.0
+        self.d_upd_y = 0.0
+        self.d_pred_x_prev = 0.0
+        self.d_pred_y_prev = 0.0
+        self.d_upd_x_prev = 0.0
+        self.d_upd_y_prev = 0.0
+        self.d_pred_theta = 0.0
+        # self.theta = 0.0 # car orientation in world coords - TODO equal to global_yaw?
+        # self.dtheta = 0.0 # delta theta
+        self.velocity_pred = 0.0 # v_x in PDF; TODO const. value??
+        self.velocity_upd = 0.0
+        self.k = 0.0 # TODO 0.5 initial value? k==0 -> not using any sensory update. k==1 -> raw GPS positions
+
+        # Odometry publishers
+        self.sub_relative_odom = rospy.Subscriber("/odom", Odometry, self.predict, queue_size=1)
+        self.sub_global_odom = rospy.Subscriber("/global_position/odom", Odometry, self.update, queue_size=1)
         
+        # init time vars
+        self.d_pred_time = 0.0
+        self.d_upd_time = 0.0
+        self.initial_time = time.time()
+        self.last_pred_time = self.initial_time
+        self.last_upd_time = self.initial_time
+
+
+        # 2nd part of the taske matrix
+        # prefix m==matrix
+        # "An initial value for the P-matrix for x and y could be 3m^2, for theta (PI/2)^2"
+        self.mP = [] # TODO - a-posteriori P-matrix
+        self.mQ = [] # TODO make assumptions - process noise matrix
+        self.mR = [] # TODO make assumptions - sensor noise matrix
+        self.mH = np.identity(3)
+        self.mK = [] # TODO Kalman gain
+
         rospy.loginfo("KalmanFilter instance initialized!")
 
-    def process_odom(self, odom_msg):
+    def process_odom_msg(self, odom_msg):
+        ''' Processes the odometry message and returns (position, orientation, pos_x, pos_y, pos_yaw) '''
         pose_odom = odom_msg.pose.pose
         position_odom = pose_odom.position
         orientation_odom = pose_odom.orientation
 
-        global_x = position_odom.x
-        global_y = position_odom.y
-        _, _, global_yaw = tf.transformations.euler_from_quaternion([
+        pos_x = position_odom.x
+        pos_y = position_odom.y
+        _, _, pos_yaw = tf.transformations.euler_from_quaternion([
             orientation_odom.x,
             orientation_odom.y,
             orientation_odom.z,
@@ -40,27 +92,58 @@ class KalmanFilter(object):
 
         rospy.loginfo("Position = %s" % position_odom)
         rospy.loginfo("Orientation = %s" % orientation_odom)
-        rospy.loginfo("Yaw = %s" % global_yaw)
+        rospy.loginfo("Yaw = %s" % pos_yaw)
 
-        self.position_odom=position_odom
-        self.orientation_odom=orientation_odom
-        self.global_x=global_x
-        self.global_y=global_y
-        self.global_yaw=global_yaw
+        return (position_odom, orientation_odom, pos_x, pos_y, pos_yaw)
+        # rospy.loginfo(">>Callback finished<<")
         
-    def predict(self):
-        # TODO
-        kh = np.array([self.global_x, self.global_y, self.global_yaw]) # position of the car, [cos(yaw)*v+tx; sin(yaw)*v*ty, yaw]
-        kV = [] # TODO, we obtain it - process noise
-        kH = [] # TODO [dx, dy, dyaw]
-        kP = [] # kP += kV
+    # def update_time(self):
+    #     ''' updates delta and last time '''
+    #     now = time.time()
+    #     self.d_time = now - self.last_time
+    #     self.last_time = now
+    
+    def predict(self, odom_msg):
+        # self.position_odom=position_odom
+        # self.orientation_odom=orientation_odom
+        # self.global_x=global_x
+        # self.global_y=global_y
+        # self.global_yaw=global_yaw
+
+        # process message
+        position_odom, orientation_odom, self.pred_x, self.pred_y, self.pred_theta = self.process_odom_msg(odom_msg)
+
+        # update time
+        now = time.time()
+        self.d_pred_time = now - self.last_pred_time
+        self.last_pred_time = now
+
+        self.d_pred_x = self.pred_x - self.pred_x_prev
+        self.d_pred_y = self.pred_y - self.pred_y_prev
+
+        distance = np.sqrt(self.d_pred_x**2 - self.d_pred_y**2)
+        self.velocity = distance  / self.d_pred_time  # distance/time
+
+        self.d_pred_x = np.cos(self.pred_theta) * self.velocity * self.d_pred_time # v*cos(theta)*v_x*deltat -- wtf is "v"?
+        self.d_pred_y = np.sin(self.pred_theta) * self.velocity * self.d_pred_time # v*cos(theta)*v_x*deltat -- wtf is "v"?
+        self.d_pred_theta = np.arccos(orientation_odom.w * 2 * np.sign(orientation_odom.z))
+
+        # TODO - wtf am i doing...
+        # x_t^{prior} = x_{t-1}^{posterior} + delta_x
+        self.pred_x = self.pred_x_prev + self.d_pred_x
+        self.pred_x_prev = self.pred_x
+        # y_t^{prior} = y_{t-1}^{posterior} + delta_y  
+        self.pred_y = self.pred_y_prev + self.d_pred_y
+        self.pred_y_prev = self.pred_y
+        # y_t^{prior} = theta_{t-1}^{posterior} + delta_theta
+        self.pred_theta = self.pred_theta_prev + self.d_pred_theta
+        self.pred_theta_prev = self.pred_theta
 
     def update(self):
         # TODO
-        z = [] # measurements and calculation
-        kP = [] 
-        kW = []
-
+        # updated_x = k * measuredGPS (WTF??) + (1-k)*predicted_position_x
+        # same with y
+        # same with theta
 
 def main(args):
     rospy.init_node('kalman_filter', anonymous=True)
