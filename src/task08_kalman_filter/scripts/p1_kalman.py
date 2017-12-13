@@ -144,6 +144,7 @@ class KalmanFilter(object):
         # updated_x = k * measuredGPS (WTF??) + (1-k)*predicted_position_x
         # same with y
         # same with theta
+        pass
 
 def main(args):
     rospy.init_node('kalman_filter', anonymous=True)
