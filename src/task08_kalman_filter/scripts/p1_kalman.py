@@ -52,17 +52,11 @@ class KalmanFilter(object):
         self.velocity_upd = 0.0
         self.k = 0.0 # TODO 0.5 initial value? k==0 -> not using any sensory update. k==1 -> raw GPS positions
 
-        # Odometry publishers
+        # Odometry subscribers, publishers
         self.sub_relative_odom = rospy.Subscriber("/odom", Odometry, self.predict, queue_size=1)
         self.sub_global_odom = rospy.Subscriber("/global_position/odom", Odometry, self.update, queue_size=1)
-        
-        # init time vars
-        self.d_pred_time = 0.0
-        self.d_upd_time = 0.0
-        self.initial_time = time.time()
-        self.last_pred_time = self.initial_time
-        self.last_upd_time = self.initial_time
-
+        # rostopic echo /global_position/filtered
+        self.pub_filtered = rospy.Publisher("/global_position/filtered", Odometry, queue_size=1)
 
         # 2nd part of the taske matrix
         # prefix m==matrix
@@ -72,6 +66,14 @@ class KalmanFilter(object):
         self.mR = [] # TODO make assumptions - sensor noise matrix
         self.mH = np.identity(3)
         self.mK = [] # TODO Kalman gain
+        # END 2nd part
+        
+        # init time vars
+        self.d_pred_time = 0.0
+        self.d_upd_time = 0.0
+        self.initial_time = time.time()
+        self.last_pred_time = self.initial_time
+        self.last_upd_time = self.initial_time
 
         rospy.loginfo("KalmanFilter instance initialized!")
 
@@ -139,11 +141,19 @@ class KalmanFilter(object):
         self.pred_theta = self.pred_theta_prev + self.d_pred_theta
         self.pred_theta_prev = self.pred_theta
 
-    def update(self):
+    def update(self, odom_msg):
+        position_odom, orientation_odom, self.upd_x, self.upd_y, self.upd_theta = self.process_odom_msg(odom_msg)
+
         # TODO
-        # updated_x = k * measuredGPS (WTF??) + (1-k)*predicted_position_x
+        # updated_x = k * measuredGPS_x + (1-k)*predicted_position_x
+        self.upd_x = self.k * self.upd_x + (1-self.k) * self.pred_x
         # same with y
+        self.upd_y = self.k * self.upd_y + (1-self.k) * self.pred_y
         # same with theta
+        self.upd_theta = self.k * self.upd_theta + (1-self.k) * self.pred_theta
+        
+        # TODO publish
+        # self.pub_filtered.publish()
         pass
 
 def main(args):
