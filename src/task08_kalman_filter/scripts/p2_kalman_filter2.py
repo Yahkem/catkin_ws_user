@@ -15,8 +15,6 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3
 from cv_bridge import CvBridge, CvBridgeError
 
-# TODO fix the x,y shift between coordinate systems?
-
 class KalmanFilter(object):
     
     def __init__(self):
@@ -34,10 +32,28 @@ class KalmanFilter(object):
         self.theta_posterior = 0.0
         self.theta_odom_prev = 0.0
         # self.theta_delta = 0.0
+
+        # 2) assume that values of vectors are in meters for x,y, radian for Theta
+        # and the values of the matrices are in m^2 and rad^2
+        # TODO 'make some assumptions' about variance and mean
+        # "one could assume that the process noise (stddev) for component y and for delta time of 0.01 is 0.0001m, so in that case, Q would be (0.0001m)^2"
+        self.Q = np.identity(3) # process noise (covariance) matrix 
+        # TODO "make assumptions for R (x,y,Theta) as well"
+        self.R = np.identity(3) # observation noise (cov.) matrix
+        self.H = np.identity(3) # sensory data transform matrix "Assume that H is the identity matrix"
+        self.P_apriori = np.identity(3) # TODO "in prediction step P_apriori = P_old + Q"
         
+        # TODO "initial value for P-matrix for x and y could be e.g. (3m)^2, theta (pi/2)^2" <- ???
+        self.P = np.array([
+            [9., 0., 0.],
+            [0., 9., 0.],
+            [0., 0., (np.pi/2.)**2]])
+
         #self.k = 0.5 # const? i think so...
-        # TODO different for x,y and one for theta
-        self.k_xy = 0.5
+        # TODO matrix or 3 different gains?
+        self.K = np.identity(3) # Kalman gain - TODO 
+        self.k_x = 0.5
+        self.k_y = 0.5
         self.k_theta = 0.5
 
         # Odometry subscribers, publishers
@@ -146,11 +162,9 @@ class KalmanFilter(object):
     # def get_velocity(self):
     #     # TODO from last 2 odom positions and delta t??
 
-    #     pass
-
 
 def main(args):
-    rospy.init_node('kalman_filter_simple', anonymous=True)
+    rospy.init_node('kalman_filter2', anonymous=True)
 
     # Create KalmanFilter object and listen to Odometry messages
     kalman = KalmanFilter()
