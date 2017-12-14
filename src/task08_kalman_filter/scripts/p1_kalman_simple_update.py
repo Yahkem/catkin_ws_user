@@ -146,7 +146,6 @@ class KalmanFilter(object):
     #     # TODO from last 2 odom positions and delta t??
 
     #     pass
-
     
 
 def main(args):
