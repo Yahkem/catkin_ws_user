@@ -16,7 +16,6 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3
 from cv_bridge import CvBridge, CvBridgeError
 
-# TODO fix the x,y shift between coordinate systems?
 
 class KalmanFilter(object):
     
@@ -39,7 +38,6 @@ class KalmanFilter(object):
         self.global_time = None
         
         # self.k = 0.5 # const? i think so...
-        # TODO different for x,y and one for theta
         self.k_xy = 0.5
         self.k_theta = 0.5
 
@@ -149,7 +147,7 @@ class KalmanFilter(object):
         print("PUB", pred_or_upd_str, x, y, theta)
         time = rospy.Time.now()
         odom_broadcaster = tf.TransformBroadcaster()
-        odom_quat = tf.transformations.quaternion_from_euler(0, 0, theta) # TODO is theta yaw? it looks like it...
+        odom_quat = tf.transformations.quaternion_from_euler(0, 0, theta)
         odom_broadcaster.sendTransform(
             (x, y, 0.),
             odom_quat,
