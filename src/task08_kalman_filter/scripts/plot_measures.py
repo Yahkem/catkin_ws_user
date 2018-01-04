@@ -4,7 +4,7 @@ y=[]
 y2=[]
 
 
-data = [line.strip().split(";") for line in open('measure6.csv')]
+data = [line.strip().split(";") for line in open('measure.csv')]
 labels = data[0]
 data = data[1:]
 data = [map(float, line) for line in data if "None" not in line]
