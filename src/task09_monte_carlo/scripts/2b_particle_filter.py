@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from __future__ import print_function
 
 import json
@@ -16,7 +14,6 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3, PoseArray
 import tf
 from ColorBulb import ColorBulb
-import matplotlib.pyplot as plt
 
 
 
@@ -112,6 +109,7 @@ def ros_callback(data):
     # calculate weight for particle a = (x, y, yaw)
     def my_func(a):
         """Average first and last element of a 1-D array"""
+        STDDEV_SQUARED = 0.1
         error = 1
         for yaw, x, y in angles:
             e = np.arctan2(y-a[1], x-a[0])-a[2]-yaw
@@ -119,7 +117,7 @@ def ros_callback(data):
                 e+=2*pi
             while e > pi:
                 e-=2*pi
-            error *= np.exp(-e**2/0.1)
+            error *= np.exp(-e**2/STDDEV_SQUARED)
         return 1-error
 
     # calculte weights
@@ -167,40 +165,23 @@ def ros_callback(data):
     ys = particles[:, 1]/100 # y
     ts = particles[:, 2] # theta = yaw
 
-    # for plot only
-    # print("%s" % xs)
-    # plt.figure(1)
-    # plt.subplot(311)
-    # plt.title('Particle distribution of x coord [cm]')
-    # plt.grid()
-    # plt.hist(particles[:, 0])
-    
-    # plt.subplot(312)
-    # plt.title('Particle distribution of y coord [cm]')
-    # plt.grid()
-    # plt.hist(particles[:, 1])
-    
-    # plt.subplot(313)
-    # plt.title('Particle distribution of yaw/theta [rad]')
-    # plt.grid()
-    # plt.hist(particles[:, 2])
-
-    # plt.show()
-    # return
-
     # means
     mx = sum(xs)/PARTICLES_COUNT
     my = sum(ys)/PARTICLES_COUNT
-    sincos = np.apply_along_axis(lambda l: np.array([sin(l), cos(l)]), 0, ts)
-    mt = np.arctan2(sum(sincos[0, :]), sum(sincos[1, :]))
+    sinsum = sum(sin(ts))
+    cossum = sum(cos(ts))
+    mt = np.arctan2(sinsum, cossum)
     #print("mean", mx, my, mt)
 
     # std.dev.
     std_x = np.sqrt(sum(np.square(xs-mx)))
     std_y = np.sqrt(sum(np.square(ys-my)))
-    sin_avg = (sum(sincos[0, :])/PARTICLES_COUNT)
-    cos_avg = (sum(sincos[1, :])/PARTICLES_COUNT)
-    std_t = np.sqrt(-np.log(sin_avg**2+cos_avg**2))
+    sin_avg = (sinsum/PARTICLES_COUNT)
+    cos_avg = (cossum/PARTICLES_COUNT)
+    if sin_avg+cos_avg > 1:
+        std_t  = 0
+    else:
+        std_t = np.sqrt(-np.log(sin_avg**2+cos_avg**2))
     #print("std ", std_x, std_y, std_t)
 
     # certainty for kalman filter
@@ -230,7 +211,7 @@ def ros_callback(data):
     # publish
     position_pub_certainty_pos.publish(certainty_pos)
     position_pub_certainty_yaw.publish(certainty_yaw)
-    # position_pub_odom.publish(odom)
+    position_pub_odom.publish(odom)
     position_pub_odom2.publish(odom)
 
 
