@@ -7,3 +7,5 @@ devel/
 logs/
 .metadata/
 .vscode/
+src/task09_monte_carlo/scripts/cv2
+src/task09_monte_carlo/scripts/json

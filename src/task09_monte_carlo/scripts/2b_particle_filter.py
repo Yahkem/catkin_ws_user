@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from __future__ import print_function
 
 import json
@@ -14,6 +16,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3, PoseArray
 import tf
 from ColorBulb import ColorBulb
+import matplotlib.pyplot as plt
 
 
 
@@ -38,13 +41,14 @@ last_yaw = None
 
 rospy.init_node('particle_triangulation', anonymous=True)
 position_pub_odom = rospy.Publisher("/global_position/odom", Odometry, queue_size=1)
-position_pub_mcpf = rospy.Publisher("/mcpf_gps", Odometry, queue_size=1)
+position_pub_odom2 = rospy.Publisher("/mcpf_gps", Odometry, queue_size=1)
 # used for kalman filter proportions
 position_pub_certainty_pos = rospy.Publisher("/global_position/certainty/pos", Float32, queue_size=1)
 position_pub_certainty_yaw = rospy.Publisher("/global_position/certainty/yaw", Float32, queue_size=1)
 pub = rospy.Publisher("/mcposearray", PoseArray, queue_size=1)
 
 def ros_odom_callback(data):
+    ''' Move all particles with car movement and add noise '''
     global particles, last_x, last_y, last_yaw
     x = data.pose.pose.orientation.x
     y = data.pose.pose.orientation.y
@@ -54,6 +58,7 @@ def ros_odom_callback(data):
     x = data.pose.pose.position.x
     y = data.pose.pose.position.y
 
+    # calculate diffference to last position
     if last_x is not None:
         diff_x = last_x-x
         diff_y = y-last_y
@@ -62,7 +67,8 @@ def ros_odom_callback(data):
             diff_yaw += 2 * pi
         if diff_yaw > pi:
             diff_yaw -= 2 * pi
-
+        
+        # move each particle by difference
         def move_particle(a):
             theta = a[2]-diff_yaw + uniform(-0.1, 0.1)
             if theta < -pi:
@@ -77,12 +83,14 @@ def ros_odom_callback(data):
             return np.array([x, y, theta])
         particles = np.apply_along_axis(move_particle, 1, particles)
 
+    # set current position as last position
     last_x = x
     last_y = y
     last_yaw = yaw
 
 
 def ros_callback(data):
+    ''' calculate particle error und create a new paricle generation '''
     global particles, PARTICLES_COUNT
     my_dict = json.loads(data.data)
     # position of car in the image
@@ -90,7 +98,8 @@ def ros_callback(data):
     pos_y = my_dict['height']/2
     bulbs = [ColorBulb(bulb) for bulb in my_dict['bulbs']]
 
-
+    # calculate angles in the image
+    # return tuple with image angle and global bulb position (for later calculation)
     angles = []
     for a in bulbs:
         if a.x_img==-1:
@@ -98,56 +107,33 @@ def ros_callback(data):
         angle = -np.arctan2(a.y_img-pos_y, a.x_img-pos_x)-pi/2
         if angle < -pi:
             angle += 2*pi
-        #print(a.name, (angle, a.x_real, a.y_real))
-        angles.append((a.name, -angle, a.x_real, a.y_real))
+        angles.append((-angle, a.x_real, a.y_real))
 
+    # calculate weight for particle a = (x, y, yaw)
     def my_func(a):
         """Average first and last element of a 1-D array"""
         error = 1
-        #print("---", a[0], a[1])
-        for name, yaw, x, y in angles:
-            #print(name, x, y, yaw, np.arctan2(y-a[1], x-a[0]), np.arctan2(y-a[1], x-a[0])-a[2]-yaw)
+        for yaw, x, y in angles:
             e = np.arctan2(y-a[1], x-a[0])-a[2]-yaw
             while e < -pi:
                 e+=2*pi
             while e > pi:
                 e-=2*pi
-            #print(e)
             error *= np.exp(-e**2/0.1)
         return 1-error
 
+    # calculte weights
     weights = 1-np.apply_along_axis(my_func, 1, particles)
+    # sort particles and weights
     argorder = np.argsort(weights)[::-1]
     weights = weights[argorder]
     particles = particles[argorder, :]
+    # loop through particles qith equal step size
     step_size = np.sum(weights)/float(PARTICLES_COUNT)
     i = step_size/2.0
     pos = 0
     s = weights[0]
     new_particles = []
-
-    # TODO delete - just for the 1st part
-    # poseArray = PoseArray()
-    # poseArray.header.stamp = rospy.Time.now()
-    # poseArray.header.frame_id = "/odom"
-    # for x, y, yaw in particles:
-    #     quaternion = tf.transformations.quaternion_from_euler(0, 0, yaw)
-    #     somePose = Pose()
-    #     somePose.position.x = x/100
-    #     somePose.position.y = y/100
-    #     somePose.position.z = 0.0
-
-    #     somePose.orientation.x = quaternion[0]
-    #     somePose.orientation.y = quaternion[1]
-    #     somePose.orientation.z = quaternion[2]
-    #     somePose.orientation.w = quaternion[3]
-
-    #     poseArray.poses.append(somePose)
-
-    # pub.publish(poseArray)
-    # return
-    # TODO end
-
     for _ in range(PARTICLES_COUNT):
         while s < i:
             s += weights[pos]
@@ -156,6 +142,7 @@ def ros_callback(data):
         i += step_size
     particles = np.array(new_particles)
 
+    # publish pose array
     poseArray = PoseArray()
     poseArray.header.stamp = rospy.Time.now()
     poseArray.header.frame_id = "/odom"
@@ -175,16 +162,36 @@ def ros_callback(data):
 
     pub.publish(poseArray)
 
+    # lists of all x, y, yaw values
     xs = particles[:, 0]/100 # x
     ys = particles[:, 1]/100 # y
     ts = particles[:, 2] # theta = yaw
 
+    # for plot only
+    # print("%s" % xs)
+    # plt.figure(1)
+    # plt.subplot(311)
+    # plt.title('Particle distribution of x coord [cm]')
+    # plt.grid()
+    # plt.hist(particles[:, 0])
+    
+    # plt.subplot(312)
+    # plt.title('Particle distribution of y coord [cm]')
+    # plt.grid()
+    # plt.hist(particles[:, 1])
+    
+    # plt.subplot(313)
+    # plt.title('Particle distribution of yaw/theta [rad]')
+    # plt.grid()
+    # plt.hist(particles[:, 2])
+
+    # plt.show()
+    # return
+
     # means
     mx = sum(xs)/PARTICLES_COUNT
     my = sum(ys)/PARTICLES_COUNT
-    print(len(ts))
     sincos = np.apply_along_axis(lambda l: np.array([sin(l), cos(l)]), 0, ts)
-    print("yohoho")
     mt = np.arctan2(sum(sincos[0, :]), sum(sincos[1, :]))
     #print("mean", mx, my, mt)
 
@@ -224,7 +231,7 @@ def ros_callback(data):
     position_pub_certainty_pos.publish(certainty_pos)
     position_pub_certainty_yaw.publish(certainty_yaw)
     # position_pub_odom.publish(odom)
-    position_pub_mcpf.publish(odom)
+    position_pub_odom2.publish(odom)
 
 
 
