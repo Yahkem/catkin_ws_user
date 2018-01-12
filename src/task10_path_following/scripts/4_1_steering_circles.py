@@ -66,11 +66,12 @@ class CircleDriver(object):
         print("--End Test1--")
 
     def kalman_listener(self, odom_msg):
-        print("kalman_listener fired!")
         # TODO plot positions after initial sensory data
         # TODO int counter because 1st measurement might be crap?
         if self.kalman_recieved: # fire only once 
             return
+
+        print("kalman_listener fired!")
 
         # (x,y) in [m]; yaw in [rad]
         (x_car, y_car, yaw_car) = self.process_odom_msg(odom_msg)
@@ -90,7 +91,7 @@ class CircleDriver(object):
         steering_deg = np.rad2deg(steering_rad)
         steering_arg = self.steer_control.mapping(steering_deg) # what we supply to the topic
 
-        print("Angle %s=%s -> %s arg\n-------\n" % (steering_rad, steering_deg, steering_arg))
+        print("Angle %srad=%sdeg -> %s steering_arg\n-------\n" % (steering_rad, steering_deg, steering_arg))
 
         backwards = False
         # TODO change backwards?
@@ -111,7 +112,7 @@ class CircleDriver(object):
         dont forget to uncomment kalman_recieved!
         '''
 
-        # self.kalman_recieved = True
+        self.kalman_recieved = True
     
     def drive(self, steering_arg, backwards=False):
         STOP_AFTER_SECS = 7 # TODO change
@@ -122,7 +123,7 @@ class CircleDriver(object):
         self.pub_steer.publish(steering_arg)
         time.sleep(0.3)
         self.pub_speed.publish(SPEED_ARG)
-        print("Drive started!")
+        print("Drive started! Steering arg=%s" % steering_arg)
         rospy.Timer(rospy.Duration(STOP_AFTER_SECS), lambda _: self.pub_speed.publish(0), oneshot=True)
 
     def process_odom_msg(self, odom_msg):
