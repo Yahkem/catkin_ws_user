@@ -52,21 +52,24 @@ class CircleDriver(object):
         self.kalman_recieved = False
         
         # Subcribers, publishers
-        self.sub_kalman = rospy.Subscriber("/global_position/filtered", Odometry, callback=self.kalman_listener, queue_size=1)
         self.pub_speed = rospy.Publisher("/manual_control/speed", Int16, queue_size=100)
         self.pub_steer = rospy.Publisher("/manual_control/steering", Int16, queue_size=100)
-        time.sleep(1) # for initializing publishers
+        time.sleep(1) # for initializing publishers - sometimes there's delay
+        self.sub_kalman = rospy.Subscriber("/global_position/filtered", Odometry, callback=self.kalman_listener, queue_size=1)
 
-        self.test_1()
+        self.test_1() # did we load the potential field?
 
     def test_1(self):
-        print("\n--Test1--")
-        print(self.potential_field[20,10])
-        print(self.potential_field[20,11, :])
+        print("\n--Test potential field loaded--")
+        print(self.potential_field[20,10]) #[0.349999... -0.739000...2]
+        print(self.potential_field[20,11, :]) # [0.34999... -0.838999...]
         print("--End Test1--")
 
     def kalman_listener(self, odom_msg):
-        if self.kalman_recieved: # fire only once TODO plot positions after initial sensory data
+        print("kalman_listener fired!")
+        # TODO plot positions after initial sensory data
+        # TODO int counter because 1st measurement might be crap?
+        if self.kalman_recieved: # fire only once 
             return
 
         # (x,y) in [m]; yaw in [rad]
@@ -83,15 +86,15 @@ class CircleDriver(object):
         x_force = math.cos(yaw_car)*x_map + math.sin(yaw_car)*y_map
         y_force = -math.sin(yaw_car)*x_map + math.cos(yaw_car)*y_map
         Kp = 4 # TODO maybe 1 or other value, because large values with 4?
-        steering_rad = Kp * math.atan(y_force / (2.5*x_force))
+        steering_rad = Kp * math.atan(y_force / (2.5*x_force)) # TODO 4 instead of 2.5?
         steering_deg = np.rad2deg(steering_rad)
         steering_arg = self.steer_control.mapping(steering_deg) # what we supply to the topic
 
         print("Angle %s=%s -> %s arg\n-------\n" % (steering_rad, steering_deg, steering_arg))
 
         backwards = False
+        # TODO change backwards?
         if steering_deg > 90 or steering_deg < -90:
-            # TODO change backwards?
             # backwards = True
             print("!!!!!!!!!!!!!!!!!!!!")
             time.sleep(2)
@@ -111,12 +114,15 @@ class CircleDriver(object):
         # self.kalman_recieved = True
     
     def drive(self, steering_arg, backwards=False):
+        STOP_AFTER_SECS = 5
         SPEED_ARG = -100 # TODO change appropriately
+
         if backwards: SPEED_ARG *= -1
 
         self.pub_steer.publish(steering_arg)
         time.sleep(0.3)
         self.pub_speed.publish(SPEED_ARG)
+        rospy.Timer(rospy.Duration(STOP_AFTER_SECS), lambda _: self.pub_speed.publish(0), oneshot=True)
 
     def process_odom_msg(self, odom_msg):
         ''' Processes the odometry message and returns tuple (pos_x, pos_y, pos_theta) '''
