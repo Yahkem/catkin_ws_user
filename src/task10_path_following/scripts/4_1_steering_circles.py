@@ -114,14 +114,15 @@ class CircleDriver(object):
         # self.kalman_recieved = True
     
     def drive(self, steering_arg, backwards=False):
-        STOP_AFTER_SECS = 5
-        SPEED_ARG = -100 # TODO change appropriately
+        STOP_AFTER_SECS = 7 # TODO change
+        SPEED_ARG = -175 # TODO change appropriately
 
         if backwards: SPEED_ARG *= -1
 
         self.pub_steer.publish(steering_arg)
         time.sleep(0.3)
         self.pub_speed.publish(SPEED_ARG)
+        print("Drive started!")
         rospy.Timer(rospy.Duration(STOP_AFTER_SECS), lambda _: self.pub_speed.publish(0), oneshot=True)
 
     def process_odom_msg(self, odom_msg):
