@@ -37,15 +37,15 @@ class BulbColorDetector(object):
 
         # BGR
         self.bulb_blue = ColorBulb("Blue", BULB_BLUE, [225, 0, 0], [255, 70, 50])
-        self.bulb_green = ColorBulb("Green", BULB_GREEN, [0, 100, 0], [60, 200, 40])
-        self.bulb_red = ColorBulb("Red", BULB_RED, [0, 0, 100], [70, 75, 255])
+        self.bulb_green = ColorBulb("Green", BULB_GREEN, [0, 100, 0], [90, 200, 70])
+        self.bulb_red = ColorBulb("Red", BULB_RED, [0, 0, 100], [90, 80, 255])
         self.bulb_purple = ColorBulb("Purple", BULB_PURPLE, [200, 50, 110], [255, 100, 230])
-        '''
-        self.bulb_blue = ColorBulb("Blue", BULB_BLUE, [225, 0, 0], [255, 70, 50])
-        self.bulb_green = ColorBulb("Green", BULB_GREEN, [0, 100, 0], [60, 200, 40])
-        self.bulb_red = ColorBulb("Red", BULB_RED, [0, 0, 130], [50, 75, 255])
-        self.bulb_purple = ColorBulb("Purple", BULB_PURPLE, [200, 50, 130], [255, 100, 230])
-        '''
+        
+        #self.bulb_blue = ColorBulb("Blue", BULB_BLUE, [225, 0, 0], [255, 70, 50])
+        #self.bulb_green = ColorBulb("Green", BULB_GREEN, [0, 100, 0], [60, 200, 40])
+        #self.bulb_red = ColorBulb("Red", BULB_RED, [0, 0, 100], [70, 75, 255])
+        #self.bulb_purple = ColorBulb("Purple", BULB_PURPLE, [200, 50, 110], [255, 100, 230])
+        
 
         self.bulbs = [
             self.bulb_blue,
@@ -70,7 +70,7 @@ class BulbColorDetector(object):
         rospy.loginfo("BulbColorDetector instance initialized!")
 
     def detect_bulbs(self, img_msg):
-        #rospy.loginfo("Subscriber has recieved the image")
+        rospy.loginfo("Subscriber has recieved the image")
 
         cv_image = self.convert_imgmsg_to_bgr(img_msg)
         if cv_image is None: rospy.loginfo("cv_image is None! Nothing to do..."); return

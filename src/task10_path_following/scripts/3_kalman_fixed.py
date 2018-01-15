@@ -55,11 +55,11 @@ class KalmanFilter(object):
 
     def certainty_pos(self, data):
         if data is not None:
-            self.k_xy = data.data
+            self.k_xy = data.data / 4.0
 
     def certainty_yaw(self, data):
         if data is not None:
-            self.k_theta = data.data
+            self.k_theta = data.data / 4.0
 
     def process_odom_msg(self, odom_msg, is_predicting=True):
         ''' Processes the odometry message and returns (position, orientation, pos_x, pos_y, pos_theta) '''
@@ -88,6 +88,8 @@ class KalmanFilter(object):
         ''' prediction step -  from /odom topic '''
 
         _,_,x,y,theta = self.process_odom_msg(odom_msg, is_predicting=True)
+	#print(x,y,theta)
+	theta *= -1
 
         # if not initilized
         if self.odom_time is None:
@@ -151,7 +153,9 @@ class KalmanFilter(object):
         k_xy_compl = 1 - self.k_xy
         self.global_x = self.k_xy*x + k_xy_compl*self.odom_x
         self.global_y = self.k_xy*y + k_xy_compl*self.odom_y
-        self.global_theta = self.k_theta*theta + (1-self.k_theta)*self.odom_theta
+        sin_mean = self.k_theta*np.sin(theta) + (1-self.k_theta)*np.sin(self.odom_theta)
+        cos_mean = self.k_theta*np.cos(theta) + (1-self.k_theta)*np.cos(self.odom_theta)
+        self.global_theta = np.arctan2(sin_mean, cos_mean)
         if self.global_theta > np.pi:
             self.global_theta -= 2*np.pi
         elif self.global_theta < -np.pi:
@@ -167,8 +171,10 @@ class KalmanFilter(object):
     def publish(self, x, y, theta, is_predicting=True):
         '''publish latest position'''
         pred_or_upd_str = "prediction" if is_predicting else "update"
-        if not is_predicting:
-            print("PUB", pred_or_upd_str, x, y, theta)
+        #if is_predicting:
+        #    print("PUB", pred_or_upd_str, x, y, theta)
+        #else:
+        #    print("-------")
         time = rospy.Time.now()
         odom_broadcaster = tf.TransformBroadcaster()
         odom_quat = tf.transformations.quaternion_from_euler(0, 0, theta) # TODO is theta yaw? it looks like it...

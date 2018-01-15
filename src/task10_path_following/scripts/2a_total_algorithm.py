@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from __future__ import print_function
 
 import json
@@ -47,6 +45,9 @@ def ros_callback(data):
     y = 0
     
     valid_bulbs = []
+    x_sum = 0
+    y_sum = 0
+    e_sum = 0
 
     for a in bulbs:
         if a.x_img==-1:
@@ -85,10 +86,15 @@ def ros_callback(data):
                 d = (x12d-x23d)*(y23d-y31d)-(y12d-y23d)*(x23d-x31d)
                 error = 1-np.abs(d)/(np.abs(d)+1000000)
                 # robot position
-                if error < best_error:
-                	best_error = error
-                	x = b.x_real+k31d*(y12d-y23d)/d
-                	y = b.y_real+k31d*(x23d-x12d)/d
+                #if error < best_error:
+                #	best_error = error
+                #	x = b.x_real+k31d*(y12d-y23d)/d
+                #	y = b.y_real+k31d*(x23d-x12d)/d
+                x = b.x_real + k31d * (y12d - y23d) / d
+                y = b.y_real + k31d * (x23d - x12d) / d
+                x_sum += x*(1-error)
+                y_sum += y*(1-error)
+                e_sum += (1-error)
         valid_bulbs.append((a, a_angle))
     if len(valid_bulbs) < 3:  # only 2 or less valid points - result not usable
         print("Number of bulbs found:", "< 3")
@@ -101,6 +107,8 @@ def ros_callback(data):
         yaw -= 2*np.pi
                 
     # position
+    x = x_sum/e_sum
+    y = y_sum/e_sum
     x = x/100.0
     y = y/100.0
         
@@ -126,7 +134,8 @@ def ros_callback(data):
 
 
     # publish
-    position_pub_certainty_pos.publish(1-best_error)
+    #position_pub_certainty_pos.publish(1-best_error)
+    position_pub_certainty_pos.publish(0.5)
     position_pub_certainty_yaw.publish(0.7)  # TODO dynamic with std.-dev.
     position_pub_odom.publish(odom)
 
