@@ -24,10 +24,10 @@ def main(map_file):
     plt.gca().set_aspect(1, 'datalim')  # keep circles as circles
     plt.tight_layout()
 
-    def show_nearest(target):
+    def show_nearest(target, yaw=1):
 
-        global yaw
-        yaw+=np.pi/3 #np.pi/2
+        # global yaw
+        # yaw+=np.pi/3 #np.pi/2
         car_length=0.3
 
         global matrix
@@ -40,7 +40,7 @@ def main(map_file):
         f_x=np.cos(yaw)*x3 + np.sin(yaw)*y3
         f_y=-np.sin(yaw)*x3 + np.cos(yaw)*y3
         Kp=4
-        steering=Kp*np.arctan(f_y/(4.0*f_x))
+        steering=Kp*np.arctan(f_y/(4.0*f_x)) # TODO do same way as when we're calculating
 
         if (f_x>0):
             speed = -150 # TODO change speed
@@ -81,7 +81,6 @@ def main(map_file):
         ax.arrow(x1, y1, x3, y3, head_width=0.01, head_length=0.01, fc='g', ec='g')
 
 
-
         plt.scatter(*target, color='r')
         plt.scatter(*(x1 + x3, y1 + y3), color='g')
         circ = plt.Circle((xc, yc), r, color='r', fill=False)
@@ -90,15 +89,17 @@ def main(map_file):
 
 
 
-    def onclick(event):
-        show_nearest((event.xdata, event.ydata))
+    # def onclick(event):
+    #     show_nearest((event.xdata, event.ydata))
+    # fig.canvas.mpl_connect('button_press_event', onclick)
 
-    fig.canvas.mpl_connect('button_press_event', onclick)
     # TODO 3 times with correct x and y
-    arange = np.arange(0.1, 3.9, 1.0)
-    for y in arange:
-        for x in arange:
-            show_nearest((x, y))
+    # arange = np.arange(0.1, 3.9, 1.0)
+    # for y in arange:
+    #     for x in arange:
+    #         show_nearest((x, y))
+
+    # show_nearest((x,y), yaw)
 
     plt.show()
  
